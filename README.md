@@ -7,12 +7,12 @@ A minimal but precise Retrieval-Augmented Generation (RAG) agent built from scra
 - Multi-source ingestion (PDF, Markdown, Web)
 - Custom chunking & embedding pipeline, built without a framework
 - Brute-force cosine similarity vector search today, with an IVF index (also built from scratch) in progress
-- Answer generation currently via the Groq API (LLaMA 3.3 70B) as a working prototype, being migrated to a fully local LLM runtime — see the roadmap below
+- Answer generation via a locally-hosted LLM — no external inference API
 
 ## Stack
 
 - Python 3.11+
-- Groq API (LLaMA 3.3 70B) — prototype generation backend, being replaced by a local LLM runtime
+- Local LLM runtime
 - sentence-transformers (embeddings)
 - numpy (vector search)
 
