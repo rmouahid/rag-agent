@@ -1,7 +1,0 @@
-groq
-sentence-transformers
-numpy
-PyMuPDF
-requests
-beautifulsoup4
-python-dotenv

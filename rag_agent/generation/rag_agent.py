@@ -1,12 +1,17 @@
 from groq import Groq
-from core.retriever import Retriever
-from loaders.pdf_loader import PDFLoader
-from loaders.md_loader import MarkdownLoader
-from loaders.web_loader import WebLoader
+from rag_agent.vectorstore.retriever import Retriever
+from rag_agent.ingestion.pdf_loader import PDFLoader
+from rag_agent.ingestion.md_loader import MarkdownLoader
+from rag_agent.ingestion.web_loader import WebLoader
 from dotenv import load_dotenv
 import os
 
+from rag_agent.logging_config import get_logger
+
 load_dotenv()
+
+logger = get_logger(__name__)
+
 
 class RAGAgent:
     def __init__(self):
@@ -33,14 +38,14 @@ class RAGAgent:
         else:
             raise ValueError(f" Format non supporté : {source}")
 
-        self.retriever.ingest(data["text"], metadata=data["metadata"])
+        self.retriever.ingest(data)
 
     def ask(self, question: str, top_k: int = 5) -> str:
         """
         Pipeline complet RAG :
         Question → Retrieve → Prompt → Groq → Réponse
         """
-        print(f"\n🔍 Recherche des chunks pertinents...")
+        logger.info("Recherche des chunks pertinents...")
         chunks = self.retriever.retrieve(question, top_k=top_k)
 
         if not chunks:
@@ -48,12 +53,12 @@ class RAGAgent:
 
         # Construit le contexte à partir des chunks récupérés
         context = "\n\n---\n\n".join([
-            f"[Source: {c['metadata']['source']}]\n{c['text']}"
+            f"[Source: {c['source']}]\n{c['text']}"
             for c in chunks
         ])
 
-        print(f"    {len(chunks)} chunks récupérés")
-        print(f"\n Génération de la réponse...\n")
+        logger.debug("%d chunks récupérés", len(chunks))
+        logger.info("Génération de la réponse...")
 
         # Prompt RAG
         prompt = f"""Tu es un assistant précis et factuel.

@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "rag-agent"
+version = "0.1.0"
+description = "A minimal but precise Retrieval-Augmented Generation (RAG) agent built from scratch in Python"
+authors = ["rmouahid"]
+readme = "README.md"
+packages = [{ include = "rag_agent" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^1.26"
+torch = { version = "^2.4", source = "pytorch-cpu" }
+sentence-transformers = "^3.0"
+fastapi = "^0.115"
+uvicorn = "^0.32"
+groq = "^0.11"
+pymupdf = "^1.24"
+requests = "^2.32"
+beautifulsoup4 = "^4.12"
+python-dotenv = "^1.0"
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,4 +1,4 @@
-from agent.rag_agent import RAGAgent
+from rag_agent.generation.rag_agent import RAGAgent
 
 def main():
     print("=" * 50)

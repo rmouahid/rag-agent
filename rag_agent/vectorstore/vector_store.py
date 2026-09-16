@@ -2,6 +2,11 @@ import numpy as np
 import json
 import os
 
+from rag_agent.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
 class VectorStore:
     def __init__(self):
         """
@@ -12,12 +17,17 @@ class VectorStore:
         self.vectors = []
         self.chunks  = []
 
-    def add(self, chunks: list[dict], embeddings: np.ndarray):
+    def add(self, chunks: list, embeddings: np.ndarray):
         """
-        Ajoute des chunks et leurs embeddings au store
+        Ajoute des Chunk et leurs embeddings au store
         """
         for chunk, embedding in zip(chunks, embeddings):
-            self.chunks.append(chunk)
+            self.chunks.append({
+                "id"       : chunk.id,
+                "text"     : chunk.text,
+                "source"   : chunk.source,
+                "metadata" : chunk.metadata,
+            })
             self.vectors.append(embedding)
 
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> list[dict]:
@@ -40,9 +50,8 @@ class VectorStore:
         results = []
         for idx in top_indices:
             results.append({
-                "text"     : self.chunks[idx]["text"],
-                "metadata" : self.chunks[idx]["metadata"],
-                "score"    : float(scores[idx])
+                **self.chunks[idx],
+                "score": float(scores[idx]),
             })
 
         return results
@@ -55,7 +64,7 @@ class VectorStore:
         np.save(f"{path}/vectors.npy", np.array(self.vectors))
         with open(f"{path}/chunks.json", "w", encoding="utf-8") as f:
             json.dump(self.chunks, f, ensure_ascii=False, indent=2)
-        print(f" VectorStore sauvegardé dans {path}")
+        logger.info("VectorStore sauvegardé dans %s", path)
 
     def load(self, path: str):
         """
@@ -64,4 +73,4 @@ class VectorStore:
         self.vectors = list(np.load(f"{path}/vectors.npy"))
         with open(f"{path}/chunks.json", "r", encoding="utf-8") as f:
             self.chunks = json.load(f)
-        print(f" VectorStore chargé depuis {path} ({len(self.chunks)} chunks)")
+        logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))
