@@ -40,3 +40,7 @@ poetry install
 ```
 
 _The FastAPI service (`poetry run uvicorn ...`) will be documented once the API milestone lands._
+
+## License
+
+[MIT](LICENSE)
