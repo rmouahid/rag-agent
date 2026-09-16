@@ -1,4 +1,5 @@
-from rag_agent.chunking.chunker import Chunker
+from rag_agent.chunking.chunker import FixedSizeChunker
+from rag_agent.ingestion.document import Document
 from rag_agent.vectorstore.embedder import Embedder
 from rag_agent.vectorstore.vector_store import VectorStore
 from rag_agent.config import config
@@ -9,26 +10,26 @@ logger = get_logger(__name__)
 
 class Retriever:
     def __init__(self, chunk_size: int = None, overlap: int = None):
-        self.chunker      = Chunker(
+        self.chunker      = FixedSizeChunker(
             chunk_size=chunk_size if chunk_size is not None else config.chunk_size,
             overlap=overlap if overlap is not None else config.chunk_overlap,
         )
         self.embedder     = Embedder()
         self.vector_store = VectorStore()
 
-    def ingest(self, text: str, metadata: dict = {}):
+    def ingest(self, document: Document):
         """
         Pipeline complet d'ingestion :
-        Texte → Chunks → Embeddings → VectorStore
+        Document → Chunks → Embeddings → VectorStore
         """
-        logger.info("Ingestion de : %s", metadata.get("source", "inconnu"))
+        logger.info("Ingestion de : %s", document.source)
 
-        # 1. Découpe le texte en chunks
-        chunks = self.chunker.chunk(text, metadata=metadata)
+        # 1. Découpe le document en chunks
+        chunks = self.chunker.chunk(document)
         logger.debug("%d chunks créés", len(chunks))
 
         # 2. Génère les embeddings
-        texts = [chunk["text"] for chunk in chunks]
+        texts = [chunk.text for chunk in chunks]
         embeddings = self.embedder.embed_many(texts)
         logger.debug("%d embeddings générés", len(embeddings))
 

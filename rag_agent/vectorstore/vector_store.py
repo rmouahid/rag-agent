@@ -17,12 +17,17 @@ class VectorStore:
         self.vectors = []
         self.chunks  = []
 
-    def add(self, chunks: list[dict], embeddings: np.ndarray):
+    def add(self, chunks: list, embeddings: np.ndarray):
         """
-        Ajoute des chunks et leurs embeddings au store
+        Ajoute des Chunk et leurs embeddings au store
         """
         for chunk, embedding in zip(chunks, embeddings):
-            self.chunks.append(chunk)
+            self.chunks.append({
+                "id"       : chunk.id,
+                "text"     : chunk.text,
+                "source"   : chunk.source,
+                "metadata" : chunk.metadata,
+            })
             self.vectors.append(embedding)
 
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> list[dict]:
@@ -45,9 +50,8 @@ class VectorStore:
         results = []
         for idx in top_indices:
             results.append({
-                "text"     : self.chunks[idx]["text"],
-                "metadata" : self.chunks[idx]["metadata"],
-                "score"    : float(scores[idx])
+                **self.chunks[idx],
+                "score": float(scores[idx]),
             })
 
         return results

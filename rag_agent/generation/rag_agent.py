@@ -38,7 +38,7 @@ class RAGAgent:
         else:
             raise ValueError(f" Format non supporté : {source}")
 
-        self.retriever.ingest(data.text, metadata=data.metadata)
+        self.retriever.ingest(data)
 
     def ask(self, question: str, top_k: int = 5) -> str:
         """
@@ -53,7 +53,7 @@ class RAGAgent:
 
         # Construit le contexte à partir des chunks récupérés
         context = "\n\n---\n\n".join([
-            f"[Source: {c['metadata']['source']}]\n{c['text']}"
+            f"[Source: {c['source']}]\n{c['text']}"
             for c in chunks
         ])
 
