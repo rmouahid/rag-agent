@@ -1,3 +1,8 @@
+from rag_agent.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
 class MarkdownLoader:
     def load(self, path: str) -> dict:
         """
@@ -6,7 +11,7 @@ class MarkdownLoader:
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
 
-        print(f" Markdown chargé : {path}")
+        logger.info("Markdown chargé : %s", path)
 
         return {
             "text": text,

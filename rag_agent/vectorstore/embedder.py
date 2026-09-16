@@ -2,6 +2,10 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 
 from rag_agent.config import config
+from rag_agent.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class Embedder:
     def __init__(self, model_name: str = None):
@@ -11,9 +15,9 @@ class Embedder:
         Se télécharge automatiquement au premier lancement.
         """
         model_name = model_name or config.embedding_model
-        print(f" Chargement du modèle d'embedding : {model_name}")
+        logger.info("Chargement du modèle d'embedding : %s", model_name)
         self.model = SentenceTransformer(model_name)
-        print(" Modèle chargé !")
+        logger.info("Modèle chargé !")
 
     def embed(self, text: str) -> np.ndarray:
         """

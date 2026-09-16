@@ -2,6 +2,11 @@ import numpy as np
 import json
 import os
 
+from rag_agent.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
 class VectorStore:
     def __init__(self):
         """
@@ -55,7 +60,7 @@ class VectorStore:
         np.save(f"{path}/vectors.npy", np.array(self.vectors))
         with open(f"{path}/chunks.json", "w", encoding="utf-8") as f:
             json.dump(self.chunks, f, ensure_ascii=False, indent=2)
-        print(f" VectorStore sauvegardé dans {path}")
+        logger.info("VectorStore sauvegardé dans %s", path)
 
     def load(self, path: str):
         """
@@ -64,4 +69,4 @@ class VectorStore:
         self.vectors = list(np.load(f"{path}/vectors.npy"))
         with open(f"{path}/chunks.json", "r", encoding="utf-8") as f:
             self.chunks = json.load(f)
-        print(f" VectorStore chargé depuis {path} ({len(self.chunks)} chunks)")
+        logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))

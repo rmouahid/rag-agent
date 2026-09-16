@@ -6,7 +6,12 @@ from rag_agent.ingestion.web_loader import WebLoader
 from dotenv import load_dotenv
 import os
 
+from rag_agent.logging_config import get_logger
+
 load_dotenv()
+
+logger = get_logger(__name__)
+
 
 class RAGAgent:
     def __init__(self):
@@ -40,7 +45,7 @@ class RAGAgent:
         Pipeline complet RAG :
         Question → Retrieve → Prompt → Groq → Réponse
         """
-        print(f"\n🔍 Recherche des chunks pertinents...")
+        logger.info("Recherche des chunks pertinents...")
         chunks = self.retriever.retrieve(question, top_k=top_k)
 
         if not chunks:
@@ -52,8 +57,8 @@ class RAGAgent:
             for c in chunks
         ])
 
-        print(f"    {len(chunks)} chunks récupérés")
-        print(f"\n Génération de la réponse...\n")
+        logger.debug("%d chunks récupérés", len(chunks))
+        logger.info("Génération de la réponse...")
 
         # Prompt RAG
         prompt = f"""Tu es un assistant précis et factuel.

@@ -2,6 +2,10 @@ from rag_agent.chunking.chunker import Chunker
 from rag_agent.vectorstore.embedder import Embedder
 from rag_agent.vectorstore.vector_store import VectorStore
 from rag_agent.config import config
+from rag_agent.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class Retriever:
     def __init__(self, chunk_size: int = None, overlap: int = None):
@@ -17,20 +21,20 @@ class Retriever:
         Pipeline complet d'ingestion :
         Texte → Chunks → Embeddings → VectorStore
         """
-        print(f"📄 Ingestion de : {metadata.get('source', 'inconnu')}")
+        logger.info("Ingestion de : %s", metadata.get("source", "inconnu"))
 
         # 1. Découpe le texte en chunks
         chunks = self.chunker.chunk(text, metadata=metadata)
-        print(f"   ✂️  {len(chunks)} chunks créés")
+        logger.debug("%d chunks créés", len(chunks))
 
         # 2. Génère les embeddings
         texts = [chunk["text"] for chunk in chunks]
         embeddings = self.embedder.embed_many(texts)
-        print(f"   🔢 {len(embeddings)} embeddings générés")
+        logger.debug("%d embeddings générés", len(embeddings))
 
         # 3. Stocke dans le vector store
         self.vector_store.add(chunks, embeddings)
-        print(f"   ✅ Chunks indexés dans le vector store")
+        logger.info("Chunks indexés dans le vector store")
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
         """
