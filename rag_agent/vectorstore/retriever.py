@@ -1,3 +1,4 @@
+from rag_agent.chunking.dedup import deduplicate_chunks
 from rag_agent.chunking.factory import get_chunker
 from rag_agent.ingestion.document import Document
 from rag_agent.vectorstore.embedder import Embedder
@@ -23,6 +24,16 @@ class Retriever:
         # 1. Découpe le document en chunks
         chunks = self.chunker.chunk(document)
         logger.debug("%d chunks créés", len(chunks))
+
+        # 1bis. Déduplique contre le batch courant et le corpus déjà indexé
+        # (ré-ingestion de la même source, ou sources qui se chevauchent)
+        existing_texts = [c["text"] for c in self.vector_store.chunks]
+        chunks = deduplicate_chunks(chunks, existing_texts=existing_texts)
+        logger.debug("%d chunks après déduplication", len(chunks))
+
+        if not chunks:
+            logger.info("Aucun chunk nouveau après déduplication")
+            return
 
         # 2. Génère les embeddings
         texts = [chunk.text for chunk in chunks]
