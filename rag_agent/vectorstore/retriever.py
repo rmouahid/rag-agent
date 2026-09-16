@@ -1,6 +1,6 @@
-from core.chunker import Chunker
-from core.embedder import Embedder
-from core.vector_store import VectorStore
+from rag_agent.chunking.chunker import Chunker
+from rag_agent.vectorstore.embedder import Embedder
+from rag_agent.vectorstore.vector_store import VectorStore
 
 class Retriever:
     def __init__(self, chunk_size: int = 500, overlap: int = 50):

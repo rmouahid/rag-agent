@@ -1,8 +1,8 @@
 from groq import Groq
-from core.retriever import Retriever
-from loaders.pdf_loader import PDFLoader
-from loaders.md_loader import MarkdownLoader
-from loaders.web_loader import WebLoader
+from rag_agent.vectorstore.retriever import Retriever
+from rag_agent.ingestion.pdf_loader import PDFLoader
+from rag_agent.ingestion.md_loader import MarkdownLoader
+from rag_agent.ingestion.web_loader import WebLoader
 from dotenv import load_dotenv
 import os
 
