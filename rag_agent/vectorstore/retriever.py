@@ -1,19 +1,15 @@
-from rag_agent.chunking.chunker import FixedSizeChunker
+from rag_agent.chunking.factory import get_chunker
 from rag_agent.ingestion.document import Document
 from rag_agent.vectorstore.embedder import Embedder
 from rag_agent.vectorstore.vector_store import VectorStore
-from rag_agent.config import config
 from rag_agent.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
 class Retriever:
-    def __init__(self, chunk_size: int = None, overlap: int = None):
-        self.chunker      = FixedSizeChunker(
-            chunk_size=chunk_size if chunk_size is not None else config.chunk_size,
-            overlap=overlap if overlap is not None else config.chunk_overlap,
-        )
+    def __init__(self, chunk_size: int = None, overlap: int = None, chunking_strategy: str = None):
+        self.chunker      = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
         self.embedder     = Embedder()
         self.vector_store = VectorStore()
 
