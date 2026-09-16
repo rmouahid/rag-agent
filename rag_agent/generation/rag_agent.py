@@ -1,6 +1,5 @@
 from groq import Groq
 from rag_agent.vectorstore.retriever import Retriever
-from rag_agent.ingestion.document import Document
 from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.md_loader import MarkdownLoader
 from rag_agent.ingestion.web_loader import WebLoader
@@ -39,13 +38,7 @@ class RAGAgent:
         else:
             raise ValueError(f" Format non supporté : {source}")
 
-        # Les loaders migrent progressivement de dict vers Document (#8-#10).
-        if isinstance(data, Document):
-            text, metadata = data.text, data.metadata
-        else:
-            text, metadata = data["text"], data["metadata"]
-
-        self.retriever.ingest(text, metadata=metadata)
+        self.retriever.ingest(data.text, metadata=data.metadata)
 
     def ask(self, question: str, top_k: int = 5) -> str:
         """
