@@ -1,5 +1,6 @@
 from rag_agent.chunking.dedup import deduplicate_chunks
 from rag_agent.chunking.factory import get_chunker
+from rag_agent.config import config
 from rag_agent.ingestion.document import Document
 from rag_agent.vectorstore.embedder import Embedder
 from rag_agent.vectorstore.vector_store import VectorStore
@@ -12,7 +13,9 @@ class Retriever:
     def __init__(self, chunk_size: int = None, overlap: int = None, chunking_strategy: str = None):
         self.chunker      = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
         self.embedder     = Embedder()
-        self.vector_store = VectorStore()
+        # Recharge le store existant au démarrage (VECTOR_STORE_PATH) : les
+        # embeddings déjà calculés ne sont pas recalculés
+        self.vector_store = VectorStore(path=config.vector_store_path or None)
 
     def ingest(self, document: Document):
         """
@@ -51,8 +54,8 @@ class Retriever:
         results = self.vector_store.search(query_vector, top_k=top_k)
         return results
 
-    def save(self, path: str = "vector_db"):
+    def save(self, path: str = None):
         self.vector_store.save(path)
 
-    def load(self, path: str = "vector_db"):
+    def load(self, path: str = None):
         self.vector_store.load(path)

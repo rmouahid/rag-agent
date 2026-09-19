@@ -8,3 +8,4 @@ chroma_db/
 venv/
 .venv/
 .cache/
+vector_db/
