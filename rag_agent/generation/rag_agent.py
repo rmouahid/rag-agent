@@ -83,8 +83,8 @@ RÉPONSE :"""
 
         return response.choices[0].message.content
 
-    def save(self, path: str = "vector_db"):
+    def save(self, path: str = None):
         self.retriever.save(path)
 
-    def load(self, path: str = "vector_db"):
+    def load(self, path: str = None):
         self.retriever.load(path)
