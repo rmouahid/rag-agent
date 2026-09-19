@@ -36,8 +36,7 @@ class Retriever:
             return
 
         # 2. Génère les embeddings
-        texts = [chunk.text for chunk in chunks]
-        embeddings = self.embedder.embed_many(texts)
+        embeddings = self.embedder.embed_chunks(chunks)
         logger.debug("%d embeddings générés", len(embeddings))
 
         # 3. Stocke dans le vector store
