@@ -4,6 +4,7 @@ import os
 import numpy as np
 
 from rag_agent.logging_config import get_logger
+from rag_agent.vectorstore.brute_force import cosine_top_k
 
 logger = get_logger(__name__)
 
@@ -97,29 +98,18 @@ class VectorStore:
 
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> list[dict]:
         """
-        Recherche les top_k chunks les plus proches via similarité cosine
+        Recherche exacte des top_k chunks les plus proches via similarité
+        cosine (brute-force sur toute la matrice, voir brute_force.py)
         """
         if self._matrix is None:
             return []
 
-        matrix = self._matrix
+        indices, scores = cosine_top_k(self._matrix, query_vector, top_k)
 
-        # Similarité cosine = produit scalaire des vecteurs normalisés
-        query_norm = query_vector / (np.linalg.norm(query_vector) + 1e-10)
-        matrix_norm = matrix / (np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10)
-        scores = matrix_norm @ query_norm
-
-        # Récupère les top_k indices
-        top_indices = np.argsort(scores)[::-1][:top_k]
-
-        results = []
-        for idx in top_indices:
-            results.append({
-                **self.chunks[idx],
-                "score": float(scores[idx]),
-            })
-
-        return results
+        return [
+            {**self.chunks[idx], "score": float(score)}
+            for idx, score in zip(indices, scores)
+        ]
 
     def save(self, path: str = None):
         """
