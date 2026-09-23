@@ -17,6 +17,7 @@ class Config:
     vector_store_path: str = os.getenv("VECTOR_STORE_PATH", "vector_db")
     index_type: str = os.getenv("INDEX_TYPE", "brute-force")
     nprobe: int = int(os.getenv("NPROBE", "8"))
+    ivf_n_lists: int = int(os.getenv("IVF_NLIST", "0"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
 

@@ -4,16 +4,19 @@ import os
 import numpy as np
 
 from rag_agent.logging_config import get_logger
+from rag_agent.config import config
 from rag_agent.vectorstore.brute_force import cosine_top_k
+from rag_agent.vectorstore.ivf import IVFIndex
 
 logger = get_logger(__name__)
 
 VECTORS_FILE = "vectors.npy"
 CHUNKS_FILE = "chunks.json"
+INDEX_TYPES = ("brute-force", "ivf")
 
 
 class VectorStore:
-    def __init__(self, path: str = None):
+    def __init__(self, path: str = None, index_type: str = None, n_lists: int = None):
         """
         Stockage en mémoire, optionnellement persisté sur disque :
         - self.vectors  : matrice numpy (N x dim)
@@ -23,8 +26,20 @@ class VectorStore:
         contient déjà un store, il est chargé tel quel (sans recalculer
         les embeddings) ; ensuite chaque `add` y est ajouté automatiquement.
         Sans path, le store reste purement en mémoire.
+
+        index_type : "brute-force" (scan exact) ou "ivf" (index IVF, voir
+        ivf.py). Défaut : INDEX_TYPE de la config.
+        n_lists    : nombre de listes de l'index IVF (défaut : IVF_NLIST de
+        la config ; 0 = ~sqrt(N)).
         """
+        index_type = index_type or config.index_type
+        if index_type not in INDEX_TYPES:
+            raise ValueError(f"index_type must be one of {INDEX_TYPES}, got {index_type!r}")
+
         self.path = path
+        self.index_type = index_type
+        self.n_lists = config.ivf_n_lists if n_lists is None else n_lists
+        self.index = None
         self._matrix = None
         self.chunks = []
         self._ids = set()
@@ -93,6 +108,9 @@ class VectorStore:
         new_vectors = embeddings[new_rows]
         self._matrix = new_vectors if self._matrix is None else np.vstack([self._matrix, new_vectors])
 
+        if self.index_type == "ivf":
+            self.rebuild_index()
+
         if self.path:
             self.save()
 
@@ -131,6 +149,9 @@ class VectorStore:
             json.dump(self.chunks, f, ensure_ascii=False, indent=2)
         os.replace(f"{chunks_path}.tmp", chunks_path)
 
+        if self.index is not None:
+            self.index.save(path)
+
         logger.info("VectorStore sauvegardé dans %s (%d chunks)", path, len(self.chunks))
 
     def load(self, path: str = None):
@@ -154,3 +175,34 @@ class VectorStore:
         self.chunks = chunks
         self._ids = {c["id"] for c in chunks}
         logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))
+
+        if self.index_type == "ivf":
+            self._load_index(path)
+
+    def rebuild_index(self):
+        """
+        (Re)construit l'index IVF sur l'ensemble des vecteurs du store
+        """
+        if self._matrix is None:
+            self.index = None
+            return
+        self.index = IVFIndex.build(self._matrix, n_lists=self.n_lists or None)
+
+    def _load_index(self, path: str):
+        """
+        Recharge l'index IVF persisté à côté du store ; s'il manque, est
+        illisible ou ne correspond plus aux vecteurs, il est reconstruit.
+        """
+        if IVFIndex.exists(path):
+            try:
+                index = IVFIndex.load(path)
+                if index.covers(len(self.chunks)):
+                    self.index = index
+                    logger.info("Index IVF chargé depuis %s (%d listes)", path, index.n_lists)
+                    return
+                logger.warning("Index IVF désynchronisé du store (%s), il sera reconstruit", path)
+            except Exception as e:  # fichier tronqué / illisible
+                logger.warning("Index IVF illisible (%s), il sera reconstruit : %s", path, e)
+        self.rebuild_index()
+        if self.index is not None:
+            self.index.save(path)
