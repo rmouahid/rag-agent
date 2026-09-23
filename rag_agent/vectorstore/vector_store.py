@@ -16,7 +16,7 @@ INDEX_TYPES = ("brute-force", "ivf")
 
 
 class VectorStore:
-    def __init__(self, path: str = None, index_type: str = None, n_lists: int = None):
+    def __init__(self, path: str = None, index_type: str = None, n_lists: int = None, nprobe: int = None):
         """
         Stockage en mémoire, optionnellement persisté sur disque :
         - self.vectors  : matrice numpy (N x dim)
@@ -31,6 +31,8 @@ class VectorStore:
         ivf.py). Défaut : INDEX_TYPE de la config.
         n_lists    : nombre de listes de l'index IVF (défaut : IVF_NLIST de
         la config ; 0 = ~sqrt(N)).
+        nprobe     : nombre de listes IVF sondées par requête, le réglage du
+        compromis recall / vitesse (défaut : NPROBE de la config).
         """
         index_type = index_type or config.index_type
         if index_type not in INDEX_TYPES:
@@ -39,6 +41,7 @@ class VectorStore:
         self.path = path
         self.index_type = index_type
         self.n_lists = config.ivf_n_lists if n_lists is None else n_lists
+        self.nprobe = nprobe or config.nprobe
         self.index = None
         self._matrix = None
         self.chunks = []
@@ -114,15 +117,20 @@ class VectorStore:
         if self.path:
             self.save()
 
-    def search(self, query_vector: np.ndarray, top_k: int = 5) -> list[dict]:
+    def search(self, query_vector: np.ndarray, top_k: int = 5, nprobe: int = None) -> list[dict]:
         """
-        Recherche exacte des top_k chunks les plus proches via similarité
-        cosine (brute-force sur toute la matrice, voir brute_force.py)
+        Recherche des top_k chunks les plus proches en similarité cosine :
+        - brute-force : scan exact de toute la matrice (brute_force.py)
+        - ivf         : scan des seules `nprobe` listes les plus proches
+                        (ivf.py) ; `nprobe` surcharge celui du store
         """
         if self._matrix is None:
             return []
 
-        indices, scores = cosine_top_k(self._matrix, query_vector, top_k)
+        if self.index is not None:
+            indices, scores = self.index.search(self._matrix, query_vector, top_k, nprobe or self.nprobe)
+        else:
+            indices, scores = cosine_top_k(self._matrix, query_vector, top_k)
 
         return [
             {**self.chunks[idx], "score": float(score)}

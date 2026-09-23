@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from rag_agent.chunking.chunk import Chunk
+from rag_agent.vectorstore.brute_force import cosine_top_k
 from rag_agent.vectorstore.ivf import INDEX_FILE, IVFIndex, default_n_lists, normalize
 from rag_agent.vectorstore.vector_store import VectorStore
 
@@ -155,3 +156,97 @@ def test_brute_force_store_has_no_index():
 def test_vector_store_rejects_an_unknown_index_type():
     with pytest.raises(ValueError, match="index_type"):
         VectorStore(index_type="hnsw")
+
+
+# --- search -------------------------------------------------------------------------
+
+
+def recall(approx, exact):
+    return len(set(approx.tolist()) & set(exact.tolist())) / len(exact)
+
+
+def test_probe_returns_the_nearest_lists_first():
+    index = IVFIndex.build(clustered_vectors(), n_lists=20)
+    query = clustered_vectors(n=1, seed=9)[0]
+
+    probed = index.probe(query, nprobe=5)
+
+    distances = ((index.centroids - normalize(query)) ** 2).sum(axis=1)
+    np.testing.assert_array_equal(probed, np.argsort(distances, kind="stable")[:5])
+
+
+def test_probing_every_list_is_exactly_the_brute_force_result():
+    vectors = clustered_vectors()
+    index = IVFIndex.build(vectors, n_lists=20)
+    rng = np.random.default_rng(1)
+
+    for query in rng.normal(size=(20, vectors.shape[1])):
+        ids, scores = index.search(vectors, query, k=10, nprobe=20)
+        exact_ids, exact_scores = cosine_top_k(vectors, query, 10)
+        np.testing.assert_array_equal(ids, exact_ids)
+        np.testing.assert_array_equal(scores, exact_scores)
+
+
+def test_results_only_come_from_the_probed_lists():
+    vectors = clustered_vectors()
+    index = IVFIndex.build(vectors, n_lists=20)
+    query = vectors[0]
+
+    ids, scores = index.search(vectors, query, k=10, nprobe=2)
+
+    allowed = set(np.concatenate([index.lists[i] for i in index.probe(query, 2)]).tolist())
+    assert set(ids.tolist()) <= allowed
+    assert (np.diff(scores) <= 0).all()
+
+
+def test_recall_grows_with_nprobe_and_is_high_on_clustered_data():
+    vectors = clustered_vectors(n=2000, n_topics=40)
+    index = IVFIndex.build(vectors, n_lists=40)
+    queries = clustered_vectors(n=50, n_topics=40, seed=7)
+
+    def mean_recall(nprobe):
+        return np.mean([
+            recall(index.search(vectors, q, 10, nprobe)[0], cosine_top_k(vectors, q, 10)[0]) for q in queries
+        ])
+
+    recalls = [mean_recall(p) for p in (1, 4, 16, 40)]
+    assert recalls == sorted(recalls)
+    assert recalls[-1] == 1.0
+    assert recalls[1] >= 0.8
+    assert recalls[2] >= 0.95
+
+
+def test_search_rejects_invalid_arguments():
+    vectors = clustered_vectors(n=50)
+    index = IVFIndex.build(vectors, n_lists=5)
+
+    with pytest.raises(ValueError, match="nprobe"):
+        index.search(vectors, vectors[0], k=5, nprobe=0)
+    with pytest.raises(ValueError, match="dimension"):
+        index.search(vectors, np.ones(3), k=5, nprobe=1)
+
+
+def test_vector_store_search_goes_through_the_ivf_index(monkeypatch):
+    vectors = clustered_vectors(n=200)
+    store = VectorStore(index_type="ivf", n_lists=10, nprobe=3)
+    store.add(make_chunks(200), vectors)
+    calls = []
+    original = IVFIndex.search
+
+    def spy(self, matrix, query, k, nprobe):
+        calls.append(nprobe)
+        return original(self, matrix, query, k, nprobe)
+
+    monkeypatch.setattr(IVFIndex, "search", spy)
+    results = store.search(vectors[5], top_k=3)
+    store.search(vectors[5], top_k=3, nprobe=10)
+
+    assert calls == [3, 10]
+    assert results[0]["text"] == "c5"
+    assert results[0]["score"] == pytest.approx(1.0)
+
+
+def test_vector_store_nprobe_defaults_to_config():
+    from rag_agent.config import config
+
+    assert VectorStore(index_type="ivf").nprobe == config.nprobe

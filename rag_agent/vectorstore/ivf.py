@@ -4,7 +4,8 @@ import os
 import numpy as np
 
 from rag_agent.logging_config import get_logger
-from rag_agent.vectorstore.kmeans import assign, kmeans
+from rag_agent.vectorstore.brute_force import cosine_top_k
+from rag_agent.vectorstore.kmeans import assign, kmeans, squared_distances
 
 logger = get_logger(__name__)
 
@@ -126,3 +127,45 @@ class IVFIndex:
         """
         labels, _ = assign(normalize(vectors), self.centroids)
         return labels
+
+    def probe(self, query: np.ndarray, nprobe: int) -> np.ndarray:
+        """
+        Numéros des `nprobe` listes dont le centre est le plus proche de la
+        requête (même métrique que l'assignation des vecteurs aux listes)
+        """
+        if nprobe < 1:
+            raise ValueError(f"nprobe must be >= 1, got {nprobe}")
+        distances = squared_distances(normalize(query)[None, :], self.centroids)[0]
+        nprobe = min(nprobe, self.n_lists)
+        if nprobe == self.n_lists:
+            return np.argsort(distances, kind="stable")
+        nearest = np.argpartition(distances, nprobe - 1)[:nprobe]
+        return nearest[np.argsort(distances[nearest], kind="stable")]
+
+    def search(self, matrix: np.ndarray, query: np.ndarray, k: int, nprobe: int) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Recherche approximative des k plus proches voisins en cosinus :
+        on sonde les `nprobe` listes les plus proches de la requête, puis on
+        fait un scan exact (cosine_top_k) sur leurs seuls vecteurs.
+
+        matrix : la matrice de vecteurs indexée (lignes = ids des listes)
+        nprobe : compromis recall / vitesse. 1 = le plus rapide ; n_lists =
+                 toutes les listes, résultat identique au brute-force
+
+        Retourne (indices, scores) triés par score décroissant, avec le même
+        départage des égalités (plus petit id) que la baseline exacte. Peut
+        retourner moins de k résultats si les listes sondées sont trop petites.
+        """
+        query = np.asarray(query)
+        if query.shape != (self.centroids.shape[1],):
+            raise ValueError(
+                f"query shape {query.shape} does not match vector dimension {self.centroids.shape[1]}"
+            )
+
+        probed = [self.lists[i] for i in self.probe(query, nprobe)]
+        candidates = np.sort(np.concatenate(probed))
+        if len(candidates) == 0:
+            return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.float64)
+
+        positions, scores = cosine_top_k(matrix[candidates], query, k)
+        return candidates[positions], scores
