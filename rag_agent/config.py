@@ -18,6 +18,7 @@ class Config:
     index_type: str = os.getenv("INDEX_TYPE", "brute-force")
     nprobe: int = int(os.getenv("NPROBE", "8"))
     ivf_n_lists: int = int(os.getenv("IVF_NLIST", "0"))
+    ivf_rebuild_threshold: float = float(os.getenv("IVF_REBUILD_THRESHOLD", "0.2"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
 

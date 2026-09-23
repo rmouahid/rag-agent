@@ -16,7 +16,14 @@ INDEX_TYPES = ("brute-force", "ivf")
 
 
 class VectorStore:
-    def __init__(self, path: str = None, index_type: str = None, n_lists: int = None, nprobe: int = None):
+    def __init__(
+        self,
+        path: str = None,
+        index_type: str = None,
+        n_lists: int = None,
+        nprobe: int = None,
+        rebuild_threshold: float = None,
+    ):
         """
         Stockage en mémoire, optionnellement persisté sur disque :
         - self.vectors  : matrice numpy (N x dim)
@@ -33,6 +40,9 @@ class VectorStore:
         la config ; 0 = ~sqrt(N)).
         nprobe     : nombre de listes IVF sondées par requête, le réglage du
         compromis recall / vitesse (défaut : NPROBE de la config).
+        rebuild_threshold : part maximale de vecteurs ajoutés incrémentalement
+        dans l'index IVF avant une reconstruction complète (défaut :
+        IVF_REBUILD_THRESHOLD de la config ; voir `add`).
         """
         index_type = index_type or config.index_type
         if index_type not in INDEX_TYPES:
@@ -42,6 +52,7 @@ class VectorStore:
         self.index_type = index_type
         self.n_lists = config.ivf_n_lists if n_lists is None else n_lists
         self.nprobe = nprobe or config.nprobe
+        self.rebuild_threshold = config.ivf_rebuild_threshold if rebuild_threshold is None else rebuild_threshold
         self.index = None
         self._matrix = None
         self.chunks = []
@@ -75,6 +86,10 @@ class VectorStore:
 
         Les chunks dont l'id est déjà présent sont ignorés, ce qui rend
         l'ajout idempotent (ré-ingestion de la même source).
+
+        Avec un index IVF, les nouveaux vecteurs sont rangés dans les listes
+        existantes (pas de nouveau k-means) ; l'index n'est reconstruit que
+        lorsque la part de vecteurs ajoutés ainsi dépasse `rebuild_threshold`.
         """
         embeddings = np.asarray(embeddings)
         if len(chunks) != len(embeddings):
@@ -109,10 +124,11 @@ class VectorStore:
             return
 
         new_vectors = embeddings[new_rows]
+        first_id = 0 if self._matrix is None else len(self._matrix)
         self._matrix = new_vectors if self._matrix is None else np.vstack([self._matrix, new_vectors])
 
         if self.index_type == "ivf":
-            self.rebuild_index()
+            self._update_index(new_vectors, first_id)
 
         if self.path:
             self.save()
@@ -189,12 +205,26 @@ class VectorStore:
 
     def rebuild_index(self):
         """
-        (Re)construit l'index IVF sur l'ensemble des vecteurs du store
+        (Re)construit l'index IVF sur l'ensemble des vecteurs du store :
+        nouveau k-means, nombre de listes recalculé si IVF_NLIST=0, dérive
+        remise à zéro. À appeler à la main si le recall se dégrade.
         """
         if self._matrix is None:
             self.index = None
             return
         self.index = IVFIndex.build(self._matrix, n_lists=self.n_lists or None)
+
+    def _update_index(self, new_vectors: np.ndarray, first_id: int):
+        if self.index is None:
+            self.rebuild_index()
+            return
+        self.index.add(new_vectors, np.arange(first_id, first_id + len(new_vectors)))
+        if self.index.drift > self.rebuild_threshold:
+            logger.info(
+                "Index IVF : %.0f%% de vecteurs ajoutés depuis la construction (seuil %.0f%%), reconstruction",
+                100 * self.index.drift, 100 * self.rebuild_threshold,
+            )
+            self.rebuild_index()
 
     def _load_index(self, path: str):
         """

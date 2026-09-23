@@ -42,11 +42,16 @@ class IVFIndex:
     (posting list) de son centre le plus proche. L'index ne stocke que
     des ids de lignes : les vecteurs eux-mêmes restent dans le
     VectorStore, qui les passe à la recherche.
+
+    Les vecteurs ajoutés après la construction sont rangés dans la liste
+    du centre existant le plus proche (`add`), sans recalculer le k-means ;
+    `n_added` compte ces ajouts pour décider quand reconstruire.
     """
 
-    def __init__(self, centroids: np.ndarray, lists: list[np.ndarray]):
+    def __init__(self, centroids: np.ndarray, lists: list[np.ndarray], n_added: int = 0):
         self.centroids = np.asarray(centroids, dtype=np.float64)
         self.lists = [np.asarray(ids, dtype=np.int64) for ids in lists]
+        self.n_added = int(n_added)
         if len(self.lists) != len(self.centroids):
             raise ValueError(f"{len(self.centroids)} centroids but {len(self.lists)} posting lists")
 
@@ -56,6 +61,16 @@ class IVFIndex:
 
     def __len__(self) -> int:
         return sum(len(ids) for ids in self.lists)
+
+    @property
+    def drift(self) -> float:
+        """
+        Part des vecteurs de l'index ajoutés incrémentalement depuis la
+        dernière construction (0 = index fraîchement construit). Ces
+        vecteurs n'ont pas participé au k-means : plus elle est grande,
+        plus les centres risquent de mal représenter le corpus.
+        """
+        return self.n_added / len(self) if len(self) else 0.0
 
     @classmethod
     def build(cls, vectors: np.ndarray, n_lists: int = None, seed: int = 0, max_iter: int = 25) -> "IVFIndex":
@@ -95,7 +110,7 @@ class IVFIndex:
 
         index_path = os.path.join(path, INDEX_FILE)
         with open(f"{index_path}.tmp", "wb") as f:
-            np.savez(f, centroids=self.centroids, ids=ids, sizes=sizes)
+            np.savez(f, centroids=self.centroids, ids=ids, sizes=sizes, n_added=self.n_added)
         os.replace(f"{index_path}.tmp", index_path)
         logger.debug("Index IVF sauvegardé : %s", index_path)
 
@@ -103,9 +118,10 @@ class IVFIndex:
     def load(cls, path: str) -> "IVFIndex":
         with np.load(os.path.join(path, INDEX_FILE), allow_pickle=False) as data:
             centroids, ids, sizes = data["centroids"], data["ids"], data["sizes"]
+            n_added = int(data["n_added"]) if "n_added" in data.files else 0
         if sizes.sum() != len(ids):
             raise ValueError(f"Corrupt IVF index at {path}: list sizes do not add up to the stored ids")
-        return cls(centroids, np.split(ids, np.cumsum(sizes)[:-1]))
+        return cls(centroids, np.split(ids, np.cumsum(sizes)[:-1]), n_added=n_added)
 
     @staticmethod
     def exists(path: str) -> bool:
@@ -127,6 +143,29 @@ class IVFIndex:
         """
         labels, _ = assign(normalize(vectors), self.centroids)
         return labels
+
+    def add(self, vectors: np.ndarray, ids: np.ndarray) -> None:
+        """
+        Ajout incrémental : chaque vecteur est rangé dans la liste de son
+        centre existant le plus proche, sans reconstruire l'index. Les
+        centres ne bougent pas.
+
+        ids : numéros de ligne des vecteurs dans la matrice du store. Ils
+        doivent être supérieurs aux ids déjà indexés (ajout en fin de
+        matrice), ce qui garde chaque posting list triée.
+        """
+        vectors = np.asarray(vectors)
+        ids = np.asarray(ids, dtype=np.int64)
+        if len(vectors) != len(ids):
+            raise ValueError(f"{len(vectors)} vectors but {len(ids)} ids: they must match one-to-one")
+        if len(ids) == 0:
+            return
+
+        labels = self.assign(vectors)
+        for list_no in np.unique(labels):
+            self.lists[list_no] = np.concatenate([self.lists[list_no], ids[labels == list_no]])
+        self.n_added += len(ids)
+        logger.debug("Index IVF : %d vecteur(s) ajouté(s) sans reconstruction (dérive %.0f%%)", len(ids), 100 * self.drift)
 
     def probe(self, query: np.ndarray, nprobe: int) -> np.ndarray:
         """
