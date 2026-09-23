@@ -69,6 +69,47 @@ closer to a fresh index at the cost of more frequent rebuilds; a higher
 one rebuilds less often but tolerates more drift. `VectorStore.rebuild_index()`
 forces a rebuild at any time.
 
+### Benchmark: brute-force vs. IVF
+
+Measured on **31,800 real chunks**: 40 public-domain books from Project
+Gutenberg, split with the project's fixed-size chunker (500 characters)
+and embedded with `all-MiniLM-L6-v2` (384 dimensions). The machine has a
+single CPU core. Recall@10 is measured against the exact brute-force
+top-10, over 200 held-out queries.
+
+| Method | nprobe | Vectors scanned | Recall@10 | Median latency | Speed-up |
+|---|---:|---:|---:|---:|---:|
+| brute-force | — | 100% | 1.000 | 24.3 ms | 1x |
+| IVF (178 lists) | 4 | 2.6% | 0.659 | 0.52 ms | 47x |
+| IVF | 8 | 5.1% | 0.766 | 0.95 ms | 26x |
+| IVF | 16 | 10.0% | 0.858 | 2.21 ms | 11x |
+| IVF | 32 | 19.5% | 0.926 | 4.52 ms | 5.4x |
+| IVF | 64 | 37.9% | 0.974 | 11.65 ms | 2.1x |
+
+![IVF recall/latency trade-off](docs/benchmarks/ivf_recall_latency.png)
+
+- `NPROBE` is the recall/latency knob. At this corpus size, `NPROBE=32`
+  keeps over 92% of the exact neighbours while being about 5x faster than
+  brute-force. The default `NPROBE=8` favours speed, at 0.77 recall.
+- At a fixed `nprobe`, recall slowly decreases as the corpus grows, because
+  the number of lists grows with it (about `sqrt(N)`). Larger corpora
+  therefore need a larger `nprobe` for the same recall.
+- Latencies include the float64 cosine computation over the scanned vectors
+  (see `brute_force.py`), which both methods share.
+
+Full results for 5k, 10k, 20k and 31.8k vectors are in
+[`docs/benchmarks/ivf.md`](docs/benchmarks/ivf.md). To reproduce them, or
+to run the benchmark on your own persisted store:
+
+```bash
+# any folder of .txt / .md files; it is chunked and embedded once into --store
+python benchmarks/ivf_benchmark.py --corpus path/to/texts --store bench_store
+python benchmarks/ivf_benchmark.py --store vector_db   # an existing store
+```
+
+The plot needs `matplotlib`, which is optional. Without it, only the
+Markdown table is written.
+
 ## Roadmap
 
 This project is under active development. The full plan — local LLM migration, IVF/HNSW/PQ vector search, a FastAPI service, an answer-quality evaluation harness, and an agentic retrieval loop — is tracked as [GitHub milestones and issues](../../issues).
