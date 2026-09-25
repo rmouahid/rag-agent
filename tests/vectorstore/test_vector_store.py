@@ -5,6 +5,7 @@ import pytest
 
 from rag_agent.chunking.chunk import Chunk
 from rag_agent.ingestion.document import Document
+from rag_agent.vectorstore import embedder as embedder_module
 from rag_agent.vectorstore import retriever as retriever_module
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.vectorstore.vector_store import VectorStore
@@ -150,6 +151,9 @@ def test_retriever_reuses_persisted_embeddings_across_restarts(tmp_path, monkeyp
         embedding_cache_dir="",
     )
     monkeypatch.setattr(retriever_module, "config", cfg)
+    # Embedder reads its own module's config: without this, the fake
+    # vectors would be written to the real embedding cache.
+    monkeypatch.setattr(embedder_module, "config", cfg)
     doc = Document(text="Paris is the capital of France. " * 30, source="france.md", metadata={"type": "markdown"})
 
     first_run = Retriever(chunk_size=200, overlap=20, chunking_strategy="fixed")
