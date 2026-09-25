@@ -1,23 +1,19 @@
-from groq import Groq
+from rag_agent.generation.llm import LocalLLM
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.md_loader import MarkdownLoader
 from rag_agent.ingestion.web_loader import WebLoader
-from dotenv import load_dotenv
-import os
-
 from rag_agent.logging_config import get_logger
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
 
 class RAGAgent:
-    def __init__(self):
+    def __init__(self, llm: LocalLLM = None):
+        # Chargé dès la construction : sans poids, l'agent échoue tout de
+        # suite avec un message clair plutôt qu'à la première question.
+        self.llm       = llm or LocalLLM()
         self.retriever = Retriever()
-        self.client    = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        self.model     = "llama-3.3-70b-versatile"
 
         self.loaders = {
             "pdf"      : PDFLoader(),
@@ -43,7 +39,7 @@ class RAGAgent:
     def ask(self, question: str, top_k: int = 5) -> str:
         """
         Pipeline complet RAG :
-        Question → Retrieve → Prompt → Groq → Réponse
+        Question → Retrieve → Prompt → LLM local → Réponse
         """
         logger.info("Recherche des chunks pertinents...")
         chunks = self.retriever.retrieve(question, top_k=top_k)
@@ -73,15 +69,7 @@ QUESTION :
 
 RÉPONSE :"""
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2
-        )
-
-        return response.choices[0].message.content
+        return self.llm.generate(prompt)
 
     def save(self, path: str = None):
         self.retriever.save(path)

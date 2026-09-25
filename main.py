@@ -1,11 +1,18 @@
+import sys
+
+from rag_agent.generation.llm import ModelNotFoundError
 from rag_agent.generation.rag_agent import RAGAgent
 
 def main():
     print("=" * 50)
-    print("  RAG Agent — powered by Groq + LLaMA 3.3")
+    print("  RAG Agent — powered by a local LLM (llama.cpp)")
     print("=" * 50)
 
-    agent = RAGAgent()
+    try:
+        agent = RAGAgent()
+    except ModelNotFoundError as e:
+        print(f"\n{e}")
+        sys.exit(1)
 
     # --- INGESTION ---
     print("\n INGESTION DES SOURCES")
