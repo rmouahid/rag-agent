@@ -41,11 +41,13 @@ class LocalLLM:
         max_tokens: int = None,
         temperature: float = None,
         threads: int = None,
+        context_margin: int = None,
     ):
         self.model_path = config.local_model_path if model_path is None else model_path
         self.context_size = context_size or config.llm_context_size
         self.max_tokens = max_tokens or config.llm_max_tokens
         self.temperature = config.llm_temperature if temperature is None else temperature
+        self.context_margin = config.llm_context_margin if context_margin is None else context_margin
         threads = config.llm_threads if threads is None else threads
 
         if not self.model_path or not os.path.isfile(self.model_path):
@@ -59,6 +61,20 @@ class LocalLLM:
             n_threads=threads or None,
             verbose=False,
         )
+
+    @property
+    def prompt_budget(self) -> int:
+        """
+        Tokens disponibles pour le prompt : la fenêtre de contexte moins la
+        réponse attendue et une marge pour le template de chat
+        """
+        return self.context_size - self.max_tokens - self.context_margin
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Nombre de tokens de `text` selon le tokenizer du modèle chargé
+        """
+        return len(self._model.tokenize(text.encode("utf-8")))
 
     def generate(self, prompt: str) -> str:
         """
