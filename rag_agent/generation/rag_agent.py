@@ -1,4 +1,6 @@
+from rag_agent.config import config
 from rag_agent.generation.llm import LocalLLM
+from rag_agent.generation.prompt import build_prompt
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.md_loader import MarkdownLoader
@@ -9,11 +11,14 @@ logger = get_logger(__name__)
 
 
 class RAGAgent:
-    def __init__(self, llm: LocalLLM = None):
+    def __init__(self, llm: LocalLLM = None, history_turns: int = None):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
         self.llm       = llm or LocalLLM()
         self.retriever = Retriever()
+        # Échanges question/réponse récents rappelés dans le prompt
+        self.history_turns = config.history_turns if history_turns is None else history_turns
+        self.history       = []
 
         self.loaders = {
             "pdf"      : PDFLoader(),
@@ -47,29 +52,24 @@ class RAGAgent:
         if not chunks:
             return " Aucun document indexé. Ingère d'abord des sources."
 
-        # Construit le contexte à partir des chunks récupérés
-        context = "\n\n---\n\n".join([
-            f"[Source: {c['source']}]\n{c['text']}"
-            for c in chunks
-        ])
-
         logger.debug("%d chunks récupérés", len(chunks))
         logger.info("Génération de la réponse...")
 
-        # Prompt RAG
-        prompt = f"""Tu es un assistant précis et factuel.
-Réponds à la question en te basant UNIQUEMENT sur le contexte fourni.
-Si la réponse n'est pas dans le contexte, dis-le clairement.
+        prompt = build_prompt(question, chunks, history=self.history)
+        answer = self.llm.generate(prompt)
 
-CONTEXTE :
-{context}
+        self._remember(question, answer)
+        return answer
 
-QUESTION :
-{question}
-
-RÉPONSE :"""
-
-        return self.llm.generate(prompt)
+    def _remember(self, question: str, answer: str):
+        """
+        Ajoute l'échange à l'historique, borné aux `history_turns` derniers
+        """
+        self.history += [
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer},
+        ]
+        self.history = self.history[-2 * self.history_turns:] if self.history_turns > 0 else []
 
     def save(self, path: str = None):
         self.retriever.save(path)

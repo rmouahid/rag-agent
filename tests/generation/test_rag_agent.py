@@ -49,3 +49,39 @@ def test_ask_without_indexed_documents_does_not_call_the_llm():
 
     assert "Aucun document" in answer
     assert llm.prompts == []
+
+
+def test_previous_exchanges_are_recalled_in_the_next_prompt():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "Les Misérables, by Victor Hugo."}]
+    llm = FakeLLM()
+    agent = RAGAgent(llm=llm, history_turns=3)
+
+    agent.ask("Who wrote Les Misérables?")
+    agent.ask("When was it published?")
+
+    first, second = llm.prompts
+    assert "HISTORIQUE" not in first
+    assert "Who wrote Les Misérables?" in second
+    assert second.index("Who wrote Les Misérables?") < second.index("When was it published?")
+
+
+def test_history_keeps_only_the_last_turns():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text"}]
+    agent = RAGAgent(llm=FakeLLM(), history_turns=1)
+
+    agent.ask("first")
+    agent.ask("second")
+
+    assert [turn["content"] for turn in agent.history] == ["second", "answer"]
+
+
+def test_zero_history_turns_disables_history():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text"}]
+    llm = FakeLLM()
+    agent = RAGAgent(llm=llm, history_turns=0)
+
+    agent.ask("first")
+    agent.ask("second")
+
+    assert agent.history == []
+    assert "first" not in llm.prompts[1]
