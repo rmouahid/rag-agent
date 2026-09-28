@@ -57,6 +57,11 @@ relevant retrieved chunks are left out first (the best one is always kept),
 then the oldest conversation exchanges. If the question and the best chunk
 alone still overflow, the agent reports it instead of answering ungrounded.
 
+`RAGAgent.ask` returns an `Answer`: the generated text plus the sources
+actually placed in the prompt (source, excerpt, chunk id and similarity
+score), so every answer can be checked against what the model was shown.
+The CLI prints them as a numbered list under the answer.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOCAL_MODEL_PATH` | `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | GGUF weights |
