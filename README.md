@@ -24,7 +24,7 @@ rag_agent/
 ├── chunking/     # Text chunking
 ├── vectorstore/  # Embeddings, vector store, retrieval
 ├── generation/   # LLM-backed answer generation (RAGAgent)
-└── api/          # FastAPI service (upcoming)
+└── api/          # FastAPI service (app, routers, dependencies)
 ```
 
 Import everything via `rag_agent.*`, e.g. `from rag_agent.generation.rag_agent import RAGAgent`.
@@ -168,7 +168,24 @@ This project is under active development. The full plan — local LLM migration,
 poetry install
 ```
 
-_The FastAPI service (`poetry run uvicorn ...`) will be documented once the API milestone lands._
+### Run the API
+
+The HTTP service is a FastAPI app served by uvicorn:
+
+```bash
+poetry run uvicorn rag_agent.api.app:app --host 127.0.0.1 --port 8000
+```
+
+The model weights and the vector store are loaded once at startup (missing
+weights stop it with the download command) and shared by all requests.
+Interactive docs are at `http://127.0.0.1:8000/docs`, and `GET /health`
+reports the loaded model and the number of indexed chunks.
+
+Avoid `--reload` outside development: each reload loads the model again.
+
+Routes live in `rag_agent/api/routers/` and receive the agent, vector store
+or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
+swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.
 
 ## License
 
