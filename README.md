@@ -62,6 +62,11 @@ actually placed in the prompt (source, excerpt, chunk id and similarity
 score), so every answer can be checked against what the model was shown.
 The CLI prints them as a numbered list under the answer.
 
+`RAGAgent.ask_stream` is the streaming counterpart: it returns a
+`StreamingAnswer` whose sources are known before the first token and
+which yields the text as the model produces it (`LocalLLM.stream`). The
+CLI uses it, so answers appear word by word.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOCAL_MODEL_PATH` | `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | GGUF weights |

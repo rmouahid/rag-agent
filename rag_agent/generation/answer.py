@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Iterator
 
 EXCERPT_LENGTH = 200
 
@@ -54,3 +55,21 @@ class Answer:
         return "\n".join(
             f"[{i}] {s.source} — {s.excerpt}" for i, s in enumerate(self.sources, start=1)
         )
+
+
+@dataclass(frozen=True)
+class StreamingAnswer:
+    """
+    Réponse en cours de génération : les sources sont connues avant le
+    premier token (le prompt est déjà construit), le texte arrive par
+    `tokens`, à consommer une seule fois
+    """
+
+    tokens: Iterator[str]
+    sources: list[Source] = field(default_factory=list)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.tokens)
+
+    def format_sources(self) -> str:
+        return Answer(text="", sources=self.sources).format_sources()

@@ -1,4 +1,5 @@
 import os
+from typing import Iterator
 
 from llama_cpp import Llama
 
@@ -76,14 +77,34 @@ class LocalLLM:
         """
         return len(self._model.tokenize(text.encode("utf-8")))
 
+    def _complete(self, prompt: str, stream: bool = False):
+        return self._model.create_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            stream=stream,
+        )
+
     def generate(self, prompt: str) -> str:
         """
         Génère une réponse au prompt, formaté avec le template de chat
         embarqué dans le fichier GGUF.
         """
-        response = self._model.create_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-        )
+        response = self._complete(prompt)
         return response["choices"][0]["message"]["content"].strip()
+
+    def stream(self, prompt: str) -> Iterator[str]:
+        """
+        Comme `generate`, mais produit le texte au fil de la génération.
+        Paresseux : rien n'est calculé avant la première itération.
+        """
+        started = False
+        for chunk in self._complete(prompt, stream=True):
+            # Le premier delta ne porte que le rôle, le dernier que la raison d'arrêt
+            content = chunk["choices"][0]["delta"].get("content")
+            if not started and content:
+                # Comme `generate`, sans les espaces de tête
+                content = content.lstrip()
+            if content:
+                started = True
+                yield content

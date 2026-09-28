@@ -23,6 +23,10 @@ class FakeLLM:
         self.prompts.append(prompt)
         return "answer"
 
+    def stream(self, prompt):
+        self.prompts.append(prompt)
+        yield from ["ans", "wer"]
+
 
 @pytest.fixture(autouse=True)
 def fake_retriever(monkeypatch):
@@ -129,3 +133,38 @@ def test_chunks_left_out_by_truncation_are_not_cited():
     answer = RAGAgent(llm=FakeLLM(prompt_budget=200)).ask("question")
 
     assert [s.chunk_id for s in answer.sources] == ["best"]
+
+
+def test_ask_stream_yields_the_answer_piece_by_piece_with_its_sources_upfront():
+    FakeRetriever.chunks = [{"id": "1", "source": "a.md", "text": "Paris.", "score": 0.9}]
+    llm = FakeLLM()
+
+    answer = RAGAgent(llm=llm).ask_stream("Capital of France?")
+
+    assert [s.source for s in answer.sources] == ["a.md"]
+    assert list(answer) == ["ans", "wer"]
+    assert "Capital of France?" in llm.prompts[0]
+
+
+def test_streamed_exchange_enters_history_once_the_stream_is_consumed():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text"}]
+    agent = RAGAgent(llm=FakeLLM())
+
+    answer = agent.ask_stream("first")
+    assert agent.history == []
+
+    list(answer)
+    assert agent.history == [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "answer"},
+    ]
+
+
+def test_ask_stream_without_indexed_documents_does_not_call_the_llm():
+    llm = FakeLLM()
+
+    answer = RAGAgent(llm=llm).ask_stream("anything")
+
+    assert "Aucun document" in "".join(answer)
+    assert answer.sources == []
+    assert llm.prompts == []
