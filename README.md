@@ -183,6 +183,25 @@ reports the loaded model and the number of indexed chunks.
 
 Avoid `--reload` outside development: each reload loads the model again.
 
+#### `POST /documents`
+
+Ingests one source (chunking, embeddings, indexing) sent as multipart form
+data, either a PDF or Markdown `file` or the `url` of an HTML page:
+
+```bash
+curl -F file=@notes.md http://127.0.0.1:8000/documents
+curl -F url=https://example.com/article http://127.0.0.1:8000/documents
+```
+
+```json
+{"source": "notes.md", "chunks_created": 3, "chunk_ids": ["96944874ef2c880e", "..."]}
+```
+
+Passages already indexed are skipped, so re-sending a source returns
+`chunks_created: 0`. An unsupported file type or a non-HTML page returns
+`415`, an unreachable URL `502`, and sending both or neither of `file` and
+`url` returns `422`. Ingestions run one at a time.
+
 Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
 swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.

@@ -12,6 +12,28 @@ logger = get_logger(__name__)
 
 NO_DOCUMENTS = " Aucun document indexé. Ingère d'abord des sources."
 
+# Extension de fichier → loader
+FILE_TYPES = {".pdf": "pdf", ".md": "markdown", ".markdown": "markdown"}
+
+
+class UnsupportedSourceError(ValueError):
+    """Ni une URL http(s), ni un fichier d'un type pris en charge."""
+
+
+def source_type(source: str) -> str:
+    """
+    Loader à utiliser pour `source` : "web", "pdf" ou "markdown"
+    """
+    if source.startswith(("http://", "https://")):
+        return "web"
+    for extension, kind in FILE_TYPES.items():
+        if source.lower().endswith(extension):
+            return kind
+    raise UnsupportedSourceError(
+        f"Unsupported source {source!r}: expected an http(s) URL or a "
+        f"{', '.join(FILE_TYPES)} file"
+    )
+
 
 class RAGAgent:
     def __init__(self, llm: LocalLLM = None, history_turns: int = None):
@@ -29,20 +51,20 @@ class RAGAgent:
             "web"      : WebLoader()
         }
 
-    def ingest(self, source: str):
+    def ingest(self, source: str, source_name: str = None) -> list[str]:
         """
-        Détecte automatiquement le type de source et l'ingère
-        """
-        if source.startswith("http"):
-            data = self.loaders["web"].load(source)
-        elif source.endswith(".pdf"):
-            data = self.loaders["pdf"].load(source)
-        elif source.endswith(".md"):
-            data = self.loaders["markdown"].load(source)
-        else:
-            raise ValueError(f" Format non supporté : {source}")
+        Détecte automatiquement le type de source et l'ingère.
 
-        self.retriever.ingest(data)
+        `source_name` remplace la source enregistrée avec les chunks — pour
+        un fichier reçu par l'API, stocké sous un nom temporaire. Retourne
+        les ids des chunks nouvellement indexés.
+        """
+        loader = self.loaders[source_type(source)]
+        data = loader.load(source)
+        if source_name:
+            data.source = source_name
+
+        return self.retriever.ingest(data)
 
     def _prepare(self, question: str, top_k: int) -> tuple[str, list[Source]] | None:
         """
