@@ -51,12 +51,19 @@ The prompt template (instructions, retrieved context with sources, recent
 conversation history) lives in `rag_agent/generation/prompt.py`, apart
 from the retrieval and generation code.
 
+The prompt must fit in `LLM_CONTEXT_SIZE - LLM_MAX_TOKENS - LLM_CONTEXT_MARGIN`
+tokens, so the answer always has room. When it would not, the least
+relevant retrieved chunks are left out first (the best one is always kept),
+then the oldest conversation exchanges. If the question and the best chunk
+alone still overflow, the agent reports it instead of answering ungrounded.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOCAL_MODEL_PATH` | `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | GGUF weights |
 | `LLM_CONTEXT_SIZE` | `4096` | Context window in tokens (prompt + answer) |
 | `LLM_MAX_TOKENS` | `512` | Maximum tokens generated per answer |
 | `LLM_TEMPERATURE` | `0.2` | Sampling temperature; low keeps answers close to the context |
+| `LLM_CONTEXT_MARGIN` | `64` | Tokens kept free for the chat template around the prompt |
 | `LLM_THREADS` | `0` | CPU threads, `0` lets llama.cpp choose |
 | `HISTORY_TURNS` | `3` | Previous question/answer exchanges recalled in the prompt, `0` for none |
 

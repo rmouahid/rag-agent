@@ -12,8 +12,12 @@ class FakeRetriever:
 
 
 class FakeLLM:
-    def __init__(self):
+    def __init__(self, prompt_budget=10_000):
         self.prompts = []
+        self.prompt_budget = prompt_budget
+
+    def count_tokens(self, text):
+        return len(text.split())
 
     def generate(self, prompt):
         self.prompts.append(prompt)
@@ -85,3 +89,17 @@ def test_zero_history_turns_disables_history():
 
     assert agent.history == []
     assert "first" not in llm.prompts[1]
+
+
+def test_ask_leaves_out_the_least_relevant_chunks_when_the_prompt_overflows():
+    FakeRetriever.chunks = [
+        {"source": "best.md", "text": "relevant " * 50, "score": 0.9},
+        {"source": "worst.md", "text": "noise " * 500, "score": 0.1},
+    ]
+    llm = FakeLLM(prompt_budget=200)
+
+    RAGAgent(llm=llm).ask("question")
+
+    (prompt,) = llm.prompts
+    assert "best.md" in prompt
+    assert "worst.md" not in prompt

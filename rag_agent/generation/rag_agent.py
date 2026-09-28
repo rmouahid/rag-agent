@@ -1,6 +1,6 @@
 from rag_agent.config import config
 from rag_agent.generation.llm import LocalLLM
-from rag_agent.generation.prompt import build_prompt
+from rag_agent.generation.truncation import fit_prompt
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.md_loader import MarkdownLoader
@@ -55,7 +55,9 @@ class RAGAgent:
         logger.debug("%d chunks récupérés", len(chunks))
         logger.info("Génération de la réponse...")
 
-        prompt = build_prompt(question, chunks, history=self.history)
+        prompt, chunks, _ = fit_prompt(
+            question, chunks, self.history, self.llm.count_tokens, self.llm.prompt_budget
+        )
         answer = self.llm.generate(prompt)
 
         self._remember(question, answer)

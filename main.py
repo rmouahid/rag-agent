@@ -1,6 +1,7 @@
 import sys
 
 from rag_agent.generation.llm import ModelNotFoundError
+from rag_agent.generation.truncation import ContextOverflowError
 from rag_agent.generation.rag_agent import RAGAgent
 
 def main():
@@ -43,7 +44,11 @@ def main():
         if not question:
             continue
 
-        answer = agent.ask(question)
+        try:
+            answer = agent.ask(question)
+        except ContextOverflowError as e:
+            print(f" Erreur : {e}")
+            continue
         print(f"\n Réponse :\n{answer}\n")
         print("-" * 50)
 

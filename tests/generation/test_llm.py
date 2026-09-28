@@ -16,6 +16,9 @@ class FakeLlama:
         self.calls = []
         FakeLlama.instances.append(self)
 
+    def tokenize(self, text, add_bos=True, special=False):
+        return [1] + list(range(len(text.split())))
+
     def create_chat_completion(self, messages, max_tokens, temperature):
         self.calls.append({"messages": messages, "max_tokens": max_tokens, "temperature": temperature})
         return {"choices": [{"message": {"role": "assistant", "content": "  Paris.\n"}}]}
@@ -54,13 +57,15 @@ def test_settings_default_to_config(weights, monkeypatch):
         llm_module,
         "config",
         llm_module.config.__class__(
-            local_model_path=weights, llm_context_size=1024, llm_max_tokens=64, llm_temperature=0.5, llm_threads=3
+            local_model_path=weights, llm_context_size=1024, llm_max_tokens=64, llm_temperature=0.5, llm_threads=3,
+            llm_context_margin=32,
         ),
     )
 
     llm = LocalLLM()
 
     assert (llm.model_path, llm.context_size, llm.max_tokens, llm.temperature) == (weights, 1024, 64, 0.5)
+    assert llm.context_margin == 32
     assert FakeLlama.instances[0].n_threads == 3
 
 
@@ -98,3 +103,16 @@ def test_unset_model_path_raises_a_clear_error():
 def test_a_directory_is_not_a_model(tmp_path):
     with pytest.raises(ModelNotFoundError):
         LocalLLM(model_path=str(tmp_path))
+
+
+def test_prompt_budget_leaves_room_for_the_answer_and_the_chat_template(weights):
+    llm = LocalLLM(model_path=weights, context_size=4096, max_tokens=512, context_margin=64)
+
+    assert llm.prompt_budget == 4096 - 512 - 64
+
+
+def test_count_tokens_uses_the_model_tokenizer(weights):
+    llm = LocalLLM(model_path=weights)
+
+    # FakeLlama: one token per word plus BOS
+    assert llm.count_tokens("three little words") == 4

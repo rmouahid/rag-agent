@@ -12,6 +12,7 @@ class Config:
     llm_context_size: int = int(os.getenv("LLM_CONTEXT_SIZE", "4096"))
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "512"))
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+    llm_context_margin: int = int(os.getenv("LLM_CONTEXT_MARGIN", "64"))
     llm_threads: int = int(os.getenv("LLM_THREADS", "0"))
     history_turns: int = int(os.getenv("HISTORY_TURNS", "3"))
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "500"))
