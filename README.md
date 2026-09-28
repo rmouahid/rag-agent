@@ -47,6 +47,10 @@ poetry run hf download bartowski/Llama-3.2-3B-Instruct-GGUF \
 and change `LOCAL_MODEL_PATH`. No code change is needed. If the file is
 missing, the agent stops at startup and prints the command above.
 
+The prompt template (instructions, retrieved context with sources, recent
+conversation history) lives in `rag_agent/generation/prompt.py`, apart
+from the retrieval and generation code.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOCAL_MODEL_PATH` | `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | GGUF weights |
@@ -54,6 +58,7 @@ missing, the agent stops at startup and prints the command above.
 | `LLM_MAX_TOKENS` | `512` | Maximum tokens generated per answer |
 | `LLM_TEMPERATURE` | `0.2` | Sampling temperature; low keeps answers close to the context |
 | `LLM_THREADS` | `0` | CPU threads, `0` lets llama.cpp choose |
+| `HISTORY_TURNS` | `3` | Previous question/answer exchanges recalled in the prompt, `0` for none |
 
 ## Vector search
 
