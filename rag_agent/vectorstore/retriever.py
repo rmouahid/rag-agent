@@ -17,10 +17,13 @@ class Retriever:
         # embeddings déjà calculés ne sont pas recalculés
         self.vector_store = VectorStore(path=config.vector_store_path or None)
 
-    def ingest(self, document: Document):
+    def ingest(self, document: Document) -> list[str]:
         """
         Pipeline complet d'ingestion :
         Document → Chunks → Embeddings → VectorStore
+
+        Retourne les ids des chunks nouvellement indexés (vide si tout
+        était déjà présent)
         """
         logger.info("Ingestion de : %s", document.source)
 
@@ -36,7 +39,7 @@ class Retriever:
 
         if not chunks:
             logger.info("Aucun chunk nouveau après déduplication")
-            return
+            return []
 
         # 2. Génère les embeddings
         embeddings = self.embedder.embed_chunks(chunks)
@@ -45,6 +48,7 @@ class Retriever:
         # 3. Stocke dans le vector store
         self.vector_store.add(chunks, embeddings)
         logger.info("Chunks indexés dans le vector store")
+        return [c.id for c in chunks]
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
         """

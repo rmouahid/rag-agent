@@ -157,15 +157,16 @@ def test_retriever_reuses_persisted_embeddings_across_restarts(tmp_path, monkeyp
     doc = Document(text="Paris is the capital of France. " * 30, source="france.md", metadata={"type": "markdown"})
 
     first_run = Retriever(chunk_size=200, overlap=20, chunking_strategy="fixed")
-    first_run.ingest(doc)
+    ids = first_run.ingest(doc)
     indexed = len(first_run.vector_store)
     assert indexed > 0
+    assert ids == [c["id"] for c in first_run.vector_store.chunks]
 
     second_run = Retriever(chunk_size=200, overlap=20, chunking_strategy="fixed")
     assert len(second_run.vector_store) == indexed
     assert second_run.embedder.model.encoded == []  # nothing recomputed on startup
 
-    second_run.ingest(doc)  # re-ingesting the same source is a no-op
+    assert second_run.ingest(doc) == []  # re-ingesting the same source is a no-op
     assert second_run.embedder.model.encoded == []
     assert len(second_run.vector_store) == indexed
     assert second_run.retrieve("capital of France", top_k=1)[0]["source"] == "france.md"

@@ -18,6 +18,7 @@ requests = "^2.32"
 beautifulsoup4 = "^4.12"
 python-dotenv = "^1.0"
 llama-cpp-python = "^0.3"
+python-multipart = "^0.0.20"
 
 [[tool.poetry.source]]
 name = "pytorch-cpu"
