@@ -45,11 +45,15 @@ def main():
             continue
 
         try:
-            answer = agent.ask(question)
+            answer = agent.ask_stream(question)
         except ContextOverflowError as e:
             print(f" Erreur : {e}")
             continue
-        print(f"\n Réponse :\n{answer}\n")
+
+        print("\n Réponse :")
+        for piece in answer:
+            print(piece, end="", flush=True)
+        print("\n")
         if answer.sources:
             print(f" Sources :\n{answer.format_sources()}\n")
         print("-" * 50)

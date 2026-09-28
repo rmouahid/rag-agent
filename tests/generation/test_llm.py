@@ -19,8 +19,18 @@ class FakeLlama:
     def tokenize(self, text, add_bos=True, special=False):
         return [1] + list(range(len(text.split())))
 
-    def create_chat_completion(self, messages, max_tokens, temperature):
+    def create_chat_completion(self, messages, max_tokens, temperature, stream=False):
         self.calls.append({"messages": messages, "max_tokens": max_tokens, "temperature": temperature})
+        if stream:
+            # Same shape as llama-cpp-python's streamed chunks: a role delta,
+            # content deltas, then an empty delta with the finish reason
+            return iter([
+                {"choices": [{"delta": {"role": "assistant"}, "finish_reason": None}]},
+                {"choices": [{"delta": {"content": " \n"}, "finish_reason": None}]},
+                {"choices": [{"delta": {"content": " Par"}, "finish_reason": None}]},
+                {"choices": [{"delta": {"content": "is."}, "finish_reason": None}]},
+                {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+            ])
         return {"choices": [{"message": {"role": "assistant", "content": "  Paris.\n"}}]}
 
 
@@ -116,3 +126,22 @@ def test_count_tokens_uses_the_model_tokenizer(weights):
 
     # FakeLlama: one token per word plus BOS
     assert llm.count_tokens("three little words") == 4
+
+
+def test_stream_yields_the_text_as_it_is_generated_without_leading_whitespace(weights):
+    llm = LocalLLM(model_path=weights, max_tokens=128, temperature=0.0)
+
+    pieces = list(llm.stream("What is the capital of France?"))
+
+    assert pieces == ["Par", "is."]
+    (call,) = FakeLlama.instances[0].calls
+    assert call["messages"] == [{"role": "user", "content": "What is the capital of France?"}]
+    assert call["max_tokens"] == 128
+
+
+def test_stream_is_lazy(weights):
+    llm = LocalLLM(model_path=weights)
+
+    llm.stream("prompt")
+
+    assert FakeLlama.instances[0].calls == []
