@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from rag_agent.api.dependencies import get_agent
 from rag_agent.generation.rag_agent import RAGAgent, UnsupportedSourceError, source_type
+from rag_agent.ingestion.url_guard import BlockedURLError
 
 router = APIRouter(tags=["documents"])
 
@@ -55,6 +56,8 @@ def _ingest_url(agent: RAGAgent, url: str) -> list[str]:
             return agent.ingest(url)
     except UnsupportedSourceError as e:
         raise _unsupported(e)
+    except BlockedURLError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ConnectionError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
     except ValueError as e:
