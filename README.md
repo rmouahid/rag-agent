@@ -202,6 +202,12 @@ Passages already indexed are skipped, so re-sending a source returns
 `415`, an unreachable URL `502`, and sending both or neither of `file` and
 `url` returns `422`. Ingestions run one at a time.
 
+URLs are fetched by the server, so they are checked first: a host that
+resolves to a loopback, private, link-local or reserved address (localhost,
+`192.168.x.x`, the cloud metadata endpoint...) is refused with `400`, and
+every redirect is checked the same way. Set `ALLOW_PRIVATE_URLS=true` to
+ingest pages from your own network.
+
 Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
 swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.

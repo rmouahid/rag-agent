@@ -3,6 +3,7 @@ import os
 import pytest
 
 from rag_agent.generation.rag_agent import UnsupportedSourceError, source_type
+from rag_agent.ingestion.url_guard import BlockedURLError
 
 
 @pytest.fixture
@@ -111,3 +112,15 @@ def test_source_type_detection():
     assert source_type("notes.markdown") == "markdown"
     with pytest.raises(UnsupportedSourceError):
         source_type("archive.zip")
+
+
+def test_blocked_url_is_a_bad_request(client, agent):
+    def ingest(source, source_name=None):
+        raise BlockedURLError("Refusing 'http://localhost/': non-public address")
+
+    agent.ingest = ingest
+
+    response = client.post("/documents", data={"url": "http://localhost/"})
+
+    assert response.status_code == 400
+    assert "non-public" in response.json()["detail"]
