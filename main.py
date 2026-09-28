@@ -50,6 +50,8 @@ def main():
             print(f" Erreur : {e}")
             continue
         print(f"\n Réponse :\n{answer}\n")
+        if answer.sources:
+            print(f" Sources :\n{answer.format_sources()}\n")
         print("-" * 50)
 
 if __name__ == "__main__":

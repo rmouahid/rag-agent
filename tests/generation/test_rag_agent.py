@@ -39,7 +39,7 @@ def test_ask_sends_the_question_and_retrieved_context_to_the_local_llm():
 
     answer = RAGAgent(llm=llm).ask("What is the capital of France?")
 
-    assert answer == "answer"
+    assert answer.text == "answer"
     (prompt,) = llm.prompts
     assert "What is the capital of France?" in prompt
     assert "[Source: a.md]\nParis is the capital of France." in prompt
@@ -51,7 +51,8 @@ def test_ask_without_indexed_documents_does_not_call_the_llm():
 
     answer = RAGAgent(llm=llm).ask("anything")
 
-    assert "Aucun document" in answer
+    assert "Aucun document" in answer.text
+    assert answer.sources == []
     assert llm.prompts == []
 
 
@@ -103,3 +104,28 @@ def test_ask_leaves_out_the_least_relevant_chunks_when_the_prompt_overflows():
     (prompt,) = llm.prompts
     assert "best.md" in prompt
     assert "worst.md" not in prompt
+
+
+def test_answer_lists_the_chunks_used_to_build_the_prompt():
+    FakeRetriever.chunks = [
+        {"id": "1", "source": "a.md", "text": "Paris is the capital of France.", "score": 0.9},
+        {"id": "2", "source": "b.pdf", "text": "Berlin is the capital of Germany.", "score": 0.4},
+    ]
+
+    answer = RAGAgent(llm=FakeLLM()).ask("What is the capital of France?")
+
+    assert [(s.chunk_id, s.source, s.excerpt) for s in answer.sources] == [
+        ("1", "a.md", "Paris is the capital of France."),
+        ("2", "b.pdf", "Berlin is the capital of Germany."),
+    ]
+
+
+def test_chunks_left_out_by_truncation_are_not_cited():
+    FakeRetriever.chunks = [
+        {"id": "best", "source": "best.md", "text": "relevant " * 50, "score": 0.9},
+        {"id": "worst", "source": "worst.md", "text": "noise " * 500, "score": 0.1},
+    ]
+
+    answer = RAGAgent(llm=FakeLLM(prompt_budget=200)).ask("question")
+
+    assert [s.chunk_id for s in answer.sources] == ["best"]

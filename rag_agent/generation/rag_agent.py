@@ -1,4 +1,5 @@
 from rag_agent.config import config
+from rag_agent.generation.answer import Answer, Source
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.truncation import fit_prompt
 from rag_agent.vectorstore.retriever import Retriever
@@ -41,16 +42,19 @@ class RAGAgent:
 
         self.retriever.ingest(data)
 
-    def ask(self, question: str, top_k: int = 5) -> str:
+    def ask(self, question: str, top_k: int = 5) -> Answer:
         """
         Pipeline complet RAG :
         Question → Retrieve → Prompt → LLM local → Réponse
+
+        La réponse porte les chunks réellement placés dans le prompt (après
+        troncature), pas tous ceux récupérés.
         """
         logger.info("Recherche des chunks pertinents...")
         chunks = self.retriever.retrieve(question, top_k=top_k)
 
         if not chunks:
-            return " Aucun document indexé. Ingère d'abord des sources."
+            return Answer(text=" Aucun document indexé. Ingère d'abord des sources.")
 
         logger.debug("%d chunks récupérés", len(chunks))
         logger.info("Génération de la réponse...")
@@ -58,9 +62,12 @@ class RAGAgent:
         prompt, chunks, _ = fit_prompt(
             question, chunks, self.history, self.llm.count_tokens, self.llm.prompt_budget
         )
-        answer = self.llm.generate(prompt)
+        answer = Answer(
+            text=self.llm.generate(prompt),
+            sources=[Source.from_chunk(c) for c in chunks],
+        )
 
-        self._remember(question, answer)
+        self._remember(question, answer.text)
         return answer
 
     def _remember(self, question: str, answer: str):
