@@ -168,3 +168,64 @@ def test_ask_stream_without_indexed_documents_does_not_call_the_llm():
     assert "Aucun document" in "".join(answer)
     assert answer.sources == []
     assert llm.prompts == []
+
+
+def test_chunks_below_the_relevance_threshold_are_not_used():
+    FakeRetriever.chunks = [
+        {"source": "relevant.md", "text": "Paris.", "score": 0.6},
+        {"source": "noise.md", "text": "Unrelated.", "score": 0.1},
+    ]
+    llm = FakeLLM()
+
+    answer = RAGAgent(llm=llm, min_relevance_score=0.3).ask("capital?")
+
+    assert [s.source for s in answer.sources] == ["relevant.md"]
+    assert "noise.md" not in llm.prompts[0]
+
+
+def test_no_relevant_chunk_gives_an_explicit_answer_without_calling_the_llm():
+    FakeRetriever.chunks = [{"source": "noise.md", "text": "Unrelated.", "score": 0.1}]
+    llm = FakeLLM()
+    agent = RAGAgent(llm=llm, min_relevance_score=0.3)
+
+    answer = agent.ask("capital?")
+    streamed = agent.ask_stream("capital?")
+
+    assert answer.status == streamed.status == "no_relevant_context"
+    assert "pertinent" in answer.text and "pertinent" in "".join(streamed)
+    assert answer.sources == []
+    assert llm.prompts == []
+
+
+def test_empty_store_is_reported_as_no_documents():
+    answer = RAGAgent(llm=FakeLLM()).ask("anything")
+
+    assert answer.status == "no_documents"
+
+
+def test_a_given_history_is_used_but_the_agent_history_is_left_untouched():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text", "score": 0.9}]
+    llm = FakeLLM()
+    agent = RAGAgent(llm=llm, history_turns=3)
+    given = [{"role": "user", "content": "earlier question"}, {"role": "assistant", "content": "earlier answer"}]
+
+    agent.ask("now?", history=given)
+    list(agent.ask_stream("again?", history=[]))
+
+    assert "earlier question" in llm.prompts[0]
+    assert "earlier question" not in llm.prompts[1]
+    assert agent.history == []
+
+
+def test_a_given_history_is_capped_to_the_last_turns():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text", "score": 0.9}]
+    llm = FakeLLM()
+    given = [
+        {"role": "user", "content": "old question"}, {"role": "assistant", "content": "old answer"},
+        {"role": "user", "content": "recent question"}, {"role": "assistant", "content": "recent answer"},
+    ]
+
+    RAGAgent(llm=llm, history_turns=1).ask("now?", history=given)
+
+    assert "old question" not in llm.prompts[0]
+    assert "recent question" in llm.prompts[0]
