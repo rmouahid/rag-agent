@@ -1,4 +1,5 @@
 from rag_agent.config import config
+from rag_agent.generation import answer as outcome
 from rag_agent.generation.answer import Answer, Source, StreamingAnswer
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.truncation import fit_prompt
@@ -10,7 +11,15 @@ from rag_agent.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-NO_DOCUMENTS = " Aucun document indexé. Ingère d'abord des sources."
+# Réponses fixes quand le LLM n'est pas appelé, faute de matière
+REFUSALS = {
+    outcome.NO_DOCUMENTS: " Aucun document indexé. Ingère d'abord des sources.",
+    outcome.NO_RELEVANT_CONTEXT: (
+        " Je n'ai trouvé aucun passage assez pertinent dans les documents indexés "
+        "pour répondre à cette question."
+    ),
+}
+NO_DOCUMENTS = REFUSALS[outcome.NO_DOCUMENTS]
 
 # Extension de fichier → loader
 FILE_TYPES = {".pdf": "pdf", ".md": "markdown", ".markdown": "markdown"}
@@ -36,7 +45,7 @@ def source_type(source: str) -> str:
 
 
 class RAGAgent:
-    def __init__(self, llm: LocalLLM = None, history_turns: int = None):
+    def __init__(self, llm: LocalLLM = None, history_turns: int = None, min_relevance_score: float = None):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
         self.llm       = llm or LocalLLM()
@@ -44,6 +53,11 @@ class RAGAgent:
         # Échanges question/réponse récents rappelés dans le prompt
         self.history_turns = config.history_turns if history_turns is None else history_turns
         self.history       = []
+        # En dessous de ce score cosinus, un chunk n'est pas considéré comme
+        # une source : mieux vaut ne pas répondre que répondre sans ancrage
+        self.min_relevance_score = (
+            config.min_relevance_score if min_relevance_score is None else min_relevance_score
+        )
 
         self.loaders = {
             "pdf"      : PDFLoader(),
@@ -66,52 +80,60 @@ class RAGAgent:
 
         return self.retriever.ingest(data)
 
-    def _prepare(self, question: str, top_k: int) -> tuple[str, list[Source]] | None:
+    def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[str, str, list[Source]]:
         """
-        Question → Retrieve → Prompt ajusté à la fenêtre de contexte.
-        Retourne (prompt, sources placées dans le prompt), ou None si aucun
-        document n'est indexé
+        Question → Retrieve → filtre de pertinence → Prompt ajusté à la
+        fenêtre de contexte. Retourne (issue, prompt, sources placées dans le
+        prompt) ; hors `ANSWERED`, le prompt est vide et le LLM inutile
         """
         logger.info("Recherche des chunks pertinents...")
         chunks = self.retriever.retrieve(question, top_k=top_k)
-
         if not chunks:
-            return None
+            return outcome.NO_DOCUMENTS, "", []
 
-        logger.debug("%d chunks récupérés", len(chunks))
-        prompt, chunks, _ = fit_prompt(
-            question, chunks, self.history, self.llm.count_tokens, self.llm.prompt_budget
+        relevant = [c for c in chunks if c.get("score", 1.0) >= self.min_relevance_score]
+        logger.debug("%d chunks récupérés, %d assez pertinents", len(chunks), len(relevant))
+        if not relevant:
+            return outcome.NO_RELEVANT_CONTEXT, "", []
+
+        prompt, relevant, _ = fit_prompt(
+            question, relevant, history, self.llm.count_tokens, self.llm.prompt_budget
         )
-        return prompt, [Source.from_chunk(c) for c in chunks]
+        return outcome.ANSWERED, prompt, [Source.from_chunk(c) for c in relevant]
 
-    def ask(self, question: str, top_k: int = 5) -> Answer:
+    def ask(self, question: str, top_k: int = 5, history: list[dict] = None) -> Answer:
         """
         Pipeline complet RAG :
         Question → Retrieve → Prompt → LLM local → Réponse
 
         La réponse porte les chunks réellement placés dans le prompt (après
         troncature), pas tous ceux récupérés.
+
+        Sans `history`, l'agent est conversationnel : il utilise et met à
+        jour son propre historique. Avec `history` (éventuellement vide),
+        l'appel est sans état — c'est le mode de l'API, partagée entre
+        plusieurs clients.
         """
-        prepared = self._prepare(question, top_k)
-        if prepared is None:
-            return Answer(text=NO_DOCUMENTS)
-        prompt, sources = prepared
+        status, prompt, sources = self._prepare(question, top_k, self._history_for(history))
+        if status != outcome.ANSWERED:
+            return Answer(text=REFUSALS[status], status=status)
 
         logger.info("Génération de la réponse...")
         answer = Answer(text=self.llm.generate(prompt), sources=sources)
 
-        self._remember(question, answer.text)
+        if history is None:
+            self._remember(question, answer.text)
         return answer
 
-    def ask_stream(self, question: str, top_k: int = 5) -> StreamingAnswer:
+    def ask_stream(self, question: str, top_k: int = 5, history: list[dict] = None) -> StreamingAnswer:
         """
         Comme `ask`, mais le texte est produit au fil de la génération.
-        L'échange n'entre dans l'historique qu'une fois le flux épuisé.
+        En mode conversationnel, l'échange n'entre dans l'historique qu'une
+        fois le flux épuisé.
         """
-        prepared = self._prepare(question, top_k)
-        if prepared is None:
-            return StreamingAnswer(tokens=iter([NO_DOCUMENTS]))
-        prompt, sources = prepared
+        status, prompt, sources = self._prepare(question, top_k, self._history_for(history))
+        if status != outcome.ANSWERED:
+            return StreamingAnswer(tokens=iter([REFUSALS[status]]), status=status)
 
         def tokens():
             logger.info("Génération de la réponse (streaming)...")
@@ -119,9 +141,19 @@ class RAGAgent:
             for piece in self.llm.stream(prompt):
                 pieces.append(piece)
                 yield piece
-            self._remember(question, "".join(pieces))
+            if history is None:
+                self._remember(question, "".join(pieces))
 
         return StreamingAnswer(tokens=tokens(), sources=sources)
+
+    def _history_for(self, history: list[dict] | None) -> list[dict]:
+        """
+        Historique à placer dans le prompt : le sien en mode
+        conversationnel, sinon celui fourni, borné aux derniers échanges
+        """
+        if history is None:
+            return self.history
+        return history[-2 * self.history_turns:] if self.history_turns > 0 else []
 
     def _remember(self, question: str, answer: str):
         """

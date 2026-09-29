@@ -3,6 +3,11 @@ from typing import Iterator
 
 EXCERPT_LENGTH = 200
 
+# Issue d'une question : répondue, ou refusée faute de matière
+ANSWERED = "answered"
+NO_DOCUMENTS = "no_documents"
+NO_RELEVANT_CONTEXT = "no_relevant_context"
+
 
 def _excerpt(text: str, length: int = EXCERPT_LENGTH) -> str:
     """
@@ -39,11 +44,13 @@ class Source:
 @dataclass(frozen=True)
 class Answer:
     """
-    Réponse générée et sources utilisées pour la construire
+    Réponse générée et sources utilisées pour la construire. Hors
+    `ANSWERED`, le texte est un message fixe et le LLM n'a pas été appelé.
     """
 
     text: str
     sources: list[Source] = field(default_factory=list)
+    status: str = ANSWERED
 
     def __str__(self) -> str:
         return self.text
@@ -67,6 +74,7 @@ class StreamingAnswer:
 
     tokens: Iterator[str]
     sources: list[Source] = field(default_factory=list)
+    status: str = ANSWERED
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.tokens)
