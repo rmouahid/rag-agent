@@ -1,21 +1,14 @@
 import os
 import shutil
 import tempfile
-import threading
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
-from rag_agent.api.dependencies import get_agent
+from rag_agent.api.dependencies import agent_lock, get_agent
 from rag_agent.generation.rag_agent import RAGAgent, UnsupportedSourceError, source_type
 from rag_agent.ingestion.url_guard import BlockedURLError
 
 router = APIRouter(tags=["documents"])
-
-# Une ingestion à la fois : le vector store (et son index IVF) n'est pas
-# protégé contre les écritures concurrentes
-_ingest_lock = threading.Lock()
-
 
 class IngestResponse(BaseModel):
     source: str
@@ -42,7 +35,7 @@ def _ingest_upload(agent: RAGAgent, file: UploadFile) -> list[str]:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         shutil.copyfileobj(file.file, tmp)
     try:
-        with _ingest_lock:
+        with agent_lock:
             return agent.ingest(tmp.name, source_name=name)
     finally:
         os.unlink(tmp.name)
@@ -52,7 +45,7 @@ def _ingest_url(agent: RAGAgent, url: str) -> list[str]:
     try:
         if source_type(url) != "web":
             raise UnsupportedSourceError(f"Unsupported URL {url!r}: expected an http(s) URL")
-        with _ingest_lock:
+        with agent_lock:
             return agent.ingest(url)
     except UnsupportedSourceError as e:
         raise _unsupported(e)

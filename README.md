@@ -57,6 +57,12 @@ relevant retrieved chunks are left out first (the best one is always kept),
 then the oldest conversation exchanges. If the question and the best chunk
 alone still overflow, the agent reports it instead of answering ungrounded.
 
+Retrieved chunks scoring below `MIN_RELEVANCE_SCORE` are discarded. If none
+is left, the agent answers that the indexed documents do not cover the
+question, without calling the LLM, rather than letting it make an answer up.
+With `all-MiniLM-L6-v2`, on-topic passages typically score 0.3 to 0.7 and
+off-topic ones below 0.2.
+
 `RAGAgent.ask` returns an `Answer`: the generated text plus the sources
 actually placed in the prompt (source, excerpt, chunk id and similarity
 score), so every answer can be checked against what the model was shown.
@@ -76,6 +82,7 @@ CLI uses it, so answers appear word by word.
 | `LLM_CONTEXT_MARGIN` | `64` | Tokens kept free for the chat template around the prompt |
 | `LLM_THREADS` | `0` | CPU threads, `0` lets llama.cpp choose |
 | `HISTORY_TURNS` | `3` | Previous question/answer exchanges recalled in the prompt, `0` for none |
+| `MIN_RELEVANCE_SCORE` | `0.25` | Minimum cosine similarity for a chunk to be used as context |
 
 ## Vector search
 
@@ -182,6 +189,42 @@ Interactive docs are at `http://127.0.0.1:8000/docs`, and `GET /health`
 reports the loaded model and the number of indexed chunks.
 
 Avoid `--reload` outside development: each reload loads the model again.
+
+#### `POST /ask`
+
+Answers a question from the indexed documents, with the sources used:
+
+```bash
+curl -s http://127.0.0.1:8000/ask -H 'content-type: application/json' \
+    -d '{"question": "Who built the Eiffel Tower?", "top_k": 5}'
+```
+
+```json
+{
+  "answer": "Gustave Eiffel, for the 1889 World's Fair.",
+  "status": "answered",
+  "sources": [{"source": "france.md", "excerpt": "The Eiffel Tower was built by...", "chunk_id": "4b6d1eecef9805b6", "score": 0.5}]
+}
+```
+
+`status` is `answered`, or `no_relevant_context` / `no_documents` when no
+indexed passage reaches `MIN_RELEVANCE_SCORE` or nothing is indexed. Those
+still return `200` with a fixed message and no sources: the model is not
+asked to answer without grounding.
+
+The API keeps no conversation state between calls. To ask a follow-up, send
+the previous exchanges in `history` (oldest first, capped to
+`HISTORY_TURNS`):
+
+```json
+{"question": "When was it built?", "history": [
+  {"role": "user", "content": "Who built the Eiffel Tower?"},
+  {"role": "assistant", "content": "Gustave Eiffel."}
+]}
+```
+
+Questions and ingestions are processed one at a time: llama.cpp cannot run
+concurrent generations on one model.
 
 #### `POST /documents`
 
