@@ -190,6 +190,11 @@ weights stop it with the download command) and shared by all requests.
 Interactive docs are at `http://127.0.0.1:8000/docs`, and `GET /health`
 reports the loaded model and the number of indexed chunks.
 
+Requests and responses are typed Pydantic models (`rag_agent/api/schemas.py`),
+documented field by field in the OpenAPI schema (`/openapi.json`). A
+malformed body, including an unknown field, is rejected with `422` and the
+offending field named.
+
 Avoid `--reload` outside development: each reload loads the model again.
 
 #### `POST /ask`
