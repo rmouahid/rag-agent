@@ -244,6 +244,60 @@ the previous exchanges in `history` (oldest first, capped to
 ]}
 ```
 
+#### `POST /ask/stream` and `GET /ask/stream`
+
+The same answer, streamed token by token as the model generates it, as
+[Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+(`text/event-stream`). The stream sends, in order:
+
+| Event | `data` |
+|---|---|
+| `sources` | `{"status": ..., "sources": [...]}`, as in `/ask`, before the first token |
+| `token` | `{"text": "..."}`, one per generated piece |
+| `done` | `{"answer": "..."}`, the full answer, then the stream ends |
+| `error` | `{"error": ..., "detail": ...}` if generation fails; ends the stream |
+
+`POST` takes the same JSON body as `/ask` (with `history`); `GET` takes
+`question` and `top_k` as query parameters, for the browser's `EventSource`,
+which can only send GET requests.
+
+```bash
+curl -N http://127.0.0.1:8000/ask/stream -H 'content-type: application/json' \
+    -d '{"question": "Who built the Eiffel Tower?"}'
+```
+
+```
+event: sources
+data: {"status": "answered", "sources": [{"source": "france.md", "excerpt": "The Eiffel Tower was built by...", "chunk_id": "4b6d1eecef9805b6", "score": 0.5}]}
+
+event: token
+data: {"text": "Gustave"}
+
+event: token
+data: {"text": " Eiffel."}
+
+event: done
+data: {"answer": "Gustave Eiffel."}
+```
+
+In a browser, with `EventSource` (close it on `done`, or it reconnects and
+asks again):
+
+```js
+const url = "/ask/stream?" + new URLSearchParams({ question: "Who built the Eiffel Tower?" });
+const events = new EventSource(url);
+events.addEventListener("sources", (e) => showSources(JSON.parse(e.data).sources));
+events.addEventListener("token", (e) => (output.textContent += JSON.parse(e.data).text));
+events.addEventListener("done", () => events.close());
+events.addEventListener("error", (e) => {
+  if (e.data) console.error(JSON.parse(e.data).detail); // server-side failure
+  events.close();
+});
+```
+
+To send `history`, `POST` with `fetch` and read `response.body` with a
+`ReadableStream` reader, splitting the text on blank lines.
+
 Questions and ingestions are processed one at a time: llama.cpp cannot run
 concurrent generations on one model.
 
