@@ -353,6 +353,19 @@ Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
 swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.
 
+## Tests
+
+```bash
+poetry run pytest
+```
+
+The suite needs neither the GGUF weights nor network access, so it runs as
+is in CI. API tests (`tests/api/`) use FastAPI's `TestClient`: unit tests
+swap the agent for a fake, and `test_integration.py` runs the real
+`RAGAgent` (loaders, chunking, vector store, relevance filter, prompt
+fitting) with a stub LLM and a bag-of-words embedding model, from upload
+to streamed answer, error paths included.
+
 ## License
 
 [MIT](LICENSE)
