@@ -97,7 +97,28 @@ class IngestResponse(BaseModel):
     chunk_ids: list[str] = Field(description="Identifiants des chunks nouvellement indexés")
 
 
+class HealthChecks(BaseModel):
+    llm: bool = Field(description="Poids du modèle chargés")
+    vector_store: bool = Field(description="Vector store chargé et cohérent (un vecteur par chunk, index IVF construit)")
+
+
 class HealthResponse(BaseModel):
-    status: str = Field(description="`ok` si le service peut répondre")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "ok",
+                    "checks": {"llm": True, "vector_store": True},
+                    "indexed_chunks": 42,
+                    "model": "models/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+                }
+            ]
+        }
+    )
+
+    status: Literal["ok", "unavailable"] = Field(
+        description="`ok` (HTTP 200) si tous les contrôles passent, sinon `unavailable` (HTTP 503)"
+    )
+    checks: HealthChecks = Field(description="Résultat de chaque contrôle")
     indexed_chunks: int = Field(ge=0, description="Nombre de chunks dans le vector store")
     model: str = Field(description="Chemin des poids GGUF chargés")

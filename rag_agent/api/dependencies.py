@@ -6,8 +6,9 @@ tests remplacent l'agent par `app.dependency_overrides[get_agent]`.
 
 import threading
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, status
 
+from rag_agent.api.errors import APIError
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.vectorstore.vector_store import VectorStore
@@ -21,9 +22,13 @@ agent_lock = threading.Lock()
 
 def get_agent(request: Request) -> RAGAgent:
     """
-    Agent unique de l'application, construit au démarrage (lifespan)
+    Agent unique de l'application, construit au démarrage (lifespan) ;
+    503 tant qu'il n'existe pas
     """
-    return request.app.state.agent
+    agent = getattr(request.app.state, "agent", None)
+    if agent is None:
+        raise APIError(status.HTTP_503_SERVICE_UNAVAILABLE, "service_unavailable", "The agent is not loaded.")
+    return agent
 
 
 def get_vector_store(agent: RAGAgent = Depends(get_agent)) -> VectorStore:

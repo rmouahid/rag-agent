@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from rag_agent.api.app import create_app
@@ -10,7 +11,46 @@ def test_health_reports_the_loaded_model_and_indexed_chunks(client, agent):
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "indexed_chunks": 2, "model": "models/fake.gguf"}
+    assert response.json() == {
+        "status": "ok",
+        "checks": {"llm": True, "vector_store": True},
+        "indexed_chunks": 2,
+        "model": "models/fake.gguf",
+    }
+
+
+@pytest.mark.parametrize(
+    "component, check",
+    [("llm", "llm"), ("vector_store", "vector_store")],
+)
+def test_health_is_503_when_a_component_is_not_ready(client, agent, component, check):
+    if component == "llm":
+        agent.llm.is_loaded = False
+    else:
+        agent.retriever.vector_store.is_ready = False
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "unavailable"
+    assert body["checks"][check] is False
+    assert all(ok for name, ok in body["checks"].items() if name != check)
+
+
+def test_health_is_503_without_an_agent(client):
+    client.app.state.agent = None
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "service_unavailable"
+
+
+def test_other_routes_are_503_without_an_agent(client):
+    client.app.state.agent = None
+
+    assert client.post("/ask", json={"question": "q"}).status_code == 503
 
 
 def test_the_agent_is_built_once_at_startup(agent):
