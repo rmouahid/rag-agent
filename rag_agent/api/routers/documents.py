@@ -2,19 +2,13 @@ import os
 import shutil
 import tempfile
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
 
 from rag_agent.api.dependencies import agent_lock, get_agent
+from rag_agent.api.schemas import IngestResponse
 from rag_agent.generation.rag_agent import RAGAgent, UnsupportedSourceError, source_type
 from rag_agent.ingestion.url_guard import BlockedURLError
 
 router = APIRouter(tags=["documents"])
-
-class IngestResponse(BaseModel):
-    source: str
-    chunks_created: int
-    chunk_ids: list[str]
-
 
 def _unsupported(error: Exception) -> HTTPException:
     return HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(error))

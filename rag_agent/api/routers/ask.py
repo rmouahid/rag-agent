@@ -1,41 +1,12 @@
-from typing import Literal
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 
 from rag_agent.api.dependencies import agent_lock, get_agent
+from rag_agent.api.schemas import AskRequest, AskResponse, SourceOut
 from rag_agent.generation.answer import Answer
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.generation.truncation import ContextOverflowError
 
 router = APIRouter(tags=["ask"])
-
-
-class Turn(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-
-
-class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=4000, description="Question posée sur les documents indexés")
-    top_k: int = Field(5, ge=1, le=50, description="Nombre de chunks récupérés avant le filtre de pertinence")
-    history: list[Turn] = Field(
-        default_factory=list,
-        description="Échanges précédents, du plus ancien au plus récent ; l'API ne garde aucun état entre deux appels",
-    )
-
-
-class SourceOut(BaseModel):
-    source: str
-    excerpt: str
-    chunk_id: str | None = None
-    score: float | None = None
-
-
-class AskResponse(BaseModel):
-    answer: str
-    status: Literal["answered", "no_documents", "no_relevant_context"]
-    sources: list[SourceOut]
 
 
 def to_response(answer: Answer) -> AskResponse:
