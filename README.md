@@ -258,6 +258,29 @@ resolves to a loopback, private, link-local or reserved address (localhost,
 every redirect is checked the same way. Set `ALLOW_PRIVATE_URLS=true` to
 ingest pages from your own network.
 
+#### Errors
+
+Every error response has the same shape, with a stable `error` code and a
+readable `detail`; stack traces never reach the client, they stay in the
+server logs:
+
+```json
+{"error": "unsupported_source", "detail": "Unsupported source 'data.xlsx': expected an http(s) URL or a .pdf, .md, .markdown file"}
+```
+
+| Status | `error` | When |
+|---|---|---|
+| 400 | `blocked_url` | The URL resolves to a non-public address |
+| 404 / 405 | `not_found` / `method_not_allowed` | Unknown route or method |
+| 415 | `unsupported_source` | Unsupported file type, non-http(s) URL or non-HTML page |
+| 422 | `validation_error` | Malformed body; `detail` lists `{field, message, type}` per rejected field |
+| 422 | `invalid_source` | Both or neither of `file` and `url` |
+| 422 | `unreadable_file` | Corrupted PDF, non-UTF-8 Markdown |
+| 422 | `context_overflow` | The question and history do not fit in the model context |
+| 500 | `ingestion_failed` / `generation_failed` | Indexing or the model failed |
+| 500 | `internal_error` | Any other unexpected error |
+| 502 | `source_unreachable` | The URL could not be fetched |
+
 Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
 swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.
