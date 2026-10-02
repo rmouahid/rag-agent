@@ -12,6 +12,7 @@ from typing import Callable
 
 from fastapi import FastAPI
 
+from rag_agent.api.errors import install_error_handlers
 from rag_agent.api.routers import ask, documents, health
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.logging_config import get_logger
@@ -39,6 +40,7 @@ def create_app(agent_factory: Callable[[], RAGAgent] = RAGAgent) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    install_error_handlers(app)
     app.include_router(health.router)
     app.include_router(documents.router)
     app.include_router(ask.router)
