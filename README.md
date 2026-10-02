@@ -187,8 +187,22 @@ poetry run uvicorn rag_agent.api.app:app --host 127.0.0.1 --port 8000
 
 The model weights and the vector store are loaded once at startup (missing
 weights stop it with the download command) and shared by all requests.
-Interactive docs are at `http://127.0.0.1:8000/docs`, and `GET /health`
-reports the loaded model and the number of indexed chunks.
+Interactive docs are at `http://127.0.0.1:8000/docs`.
+
+#### `GET /health`
+
+Checks that the model weights are loaded and that the vector store is
+consistent (one vector per chunk, IVF index built), and answers `200` when
+both pass, `503` otherwise, so it can be used as is for a Docker or load
+balancer healthcheck:
+
+```json
+{"status": "ok", "checks": {"llm": true, "vector_store": true}, "indexed_chunks": 42, "model": "models/Llama-3.2-3B-Instruct-Q4_K_M.gguf"}
+```
+
+```bash
+curl -fsS http://127.0.0.1:8000/health   # exits non-zero on 503
+```
 
 Requests and responses are typed Pydantic models (`rag_agent/api/schemas.py`),
 documented field by field in the OpenAPI schema (`/openapi.json`). A

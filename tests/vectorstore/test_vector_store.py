@@ -170,3 +170,28 @@ def test_retriever_reuses_persisted_embeddings_across_restarts(tmp_path, monkeyp
     assert second_run.embedder.model.encoded == []
     assert len(second_run.vector_store) == indexed
     assert second_run.retrieve("capital of France", top_k=1)[0]["source"] == "france.md"
+
+
+def test_an_empty_store_is_ready():
+    assert VectorStore().is_ready
+
+
+def test_a_store_with_one_vector_per_chunk_is_ready():
+    store = VectorStore()
+    store.add(make_chunks("a", "b"), make_vectors(2))
+    assert store.is_ready
+
+
+def test_a_store_whose_vectors_and_chunks_disagree_is_not_ready():
+    store = VectorStore()
+    store.add(make_chunks("a", "b"), make_vectors(2))
+    store.chunks.append({"id": "orphan", "text": "c", "source": "doc.md", "metadata": {}})
+    assert not store.is_ready
+
+
+def test_an_ivf_store_without_its_index_is_not_ready():
+    store = VectorStore(index_type="ivf")
+    store.add(make_chunks("a", "b", "c"), make_vectors(3))
+    assert store.is_ready
+    store.index = None
+    assert not store.is_ready

@@ -64,6 +64,13 @@ class LocalLLM:
         )
 
     @property
+    def is_loaded(self) -> bool:
+        """
+        Poids chargés en mémoire, prêts à générer
+        """
+        return getattr(self, "_model", None) is not None
+
+    @property
     def prompt_budget(self) -> int:
         """
         Tokens disponibles pour le prompt : la fenêtre de contexte moins la

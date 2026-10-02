@@ -145,3 +145,11 @@ def test_stream_is_lazy(weights):
     llm.stream("prompt")
 
     assert FakeLlama.instances[0].calls == []
+
+
+def test_is_loaded_once_the_weights_are_in_memory(weights):
+    llm = LocalLLM(model_path=weights)
+    assert llm.is_loaded
+
+    llm._model = None
+    assert not llm.is_loaded

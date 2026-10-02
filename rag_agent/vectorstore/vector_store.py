@@ -79,6 +79,16 @@ class VectorStore:
     def __len__(self) -> int:
         return len(self.chunks)
 
+    @property
+    def is_ready(self) -> bool:
+        """
+        Prêt à être interrogé : un vecteur par chunk, et l'index IVF construit
+        dès que le store n'est pas vide
+        """
+        if len(self.vectors) != len(self.chunks):
+            return False
+        return self.index_type != "ivf" or self._matrix is None or self.index is not None
+
     def add(self, chunks: list, embeddings: np.ndarray):
         """
         Ajoute des Chunk et leurs embeddings au store (append), et

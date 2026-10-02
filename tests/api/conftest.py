@@ -7,6 +7,7 @@ from rag_agent.api.app import create_app
 class FakeVectorStore:
     def __init__(self):
         self.chunks = []
+        self.is_ready = True
 
 
 class FakeRetriever:
@@ -16,6 +17,7 @@ class FakeRetriever:
 
 class FakeLLM:
     model_path = "models/fake.gguf"
+    is_loaded = True
 
 
 class FakeAgent:
