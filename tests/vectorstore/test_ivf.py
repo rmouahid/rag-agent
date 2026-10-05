@@ -106,7 +106,7 @@ def test_covers_detects_an_index_out_of_sync_with_the_store():
 
 def test_vector_store_builds_and_persists_the_index_alongside_the_store(tmp_path):
     vectors = clustered_vectors(n=100)
-    store = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=10)
+    store = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=10, ivf_min_vectors=0)
     store.add(make_chunks(100), vectors)
 
     assert store.index.n_lists == 10
@@ -115,14 +115,14 @@ def test_vector_store_builds_and_persists_the_index_alongside_the_store(tmp_path
 
 
 def test_vector_store_reloads_the_persisted_index_without_rebuilding(tmp_path, monkeypatch):
-    store = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=10)
+    store = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=10, ivf_min_vectors=0)
     store.add(make_chunks(100), clustered_vectors(n=100))
 
     def fail(*args, **kwargs):
         raise AssertionError("the index should be loaded, not rebuilt")
 
     monkeypatch.setattr(IVFIndex, "build", fail)
-    reopened = VectorStore(path=str(tmp_path), index_type="ivf")
+    reopened = VectorStore(path=str(tmp_path), index_type="ivf", ivf_min_vectors=0)
 
     np.testing.assert_array_equal(reopened.index.centroids, store.index.centroids)
 
@@ -131,17 +131,19 @@ def test_vector_store_rebuilds_a_stale_or_missing_index_on_load(tmp_path):
     VectorStore(path=str(tmp_path), index_type="brute-force").add(make_chunks(60), clustered_vectors(n=60))
     assert not IVFIndex.exists(str(tmp_path))
 
-    reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6)
+    reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0)
 
     assert reopened.index.covers(60)
     assert IVFIndex.exists(str(tmp_path))
 
 
 def test_vector_store_rebuilds_a_corrupt_index_on_load(tmp_path):
-    VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6).add(make_chunks(60), clustered_vectors(n=60))
+    VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0).add(
+        make_chunks(60), clustered_vectors(n=60)
+    )
     (tmp_path / INDEX_FILE).write_bytes(b"not an npz file")
 
-    reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6)
+    reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0)
 
     assert reopened.index.covers(60)
 
@@ -228,7 +230,7 @@ def test_search_rejects_invalid_arguments():
 
 def test_vector_store_search_goes_through_the_ivf_index(monkeypatch):
     vectors = clustered_vectors(n=200)
-    store = VectorStore(index_type="ivf", n_lists=10, nprobe=3)
+    store = VectorStore(index_type="ivf", n_lists=10, nprobe=3, ivf_min_vectors=0)
     store.add(make_chunks(200), vectors)
     calls = []
     original = IVFIndex.search
@@ -249,7 +251,7 @@ def test_vector_store_search_goes_through_the_ivf_index(monkeypatch):
 def test_vector_store_nprobe_defaults_to_config():
     from rag_agent.config import config
 
-    assert VectorStore(index_type="ivf").nprobe == config.nprobe
+    assert VectorStore(index_type="ivf", ivf_min_vectors=0).nprobe == config.nprobe
 
 
 # --- incremental updates -------------------------------------------------------------
@@ -307,7 +309,7 @@ def test_n_added_survives_save_and_load(tmp_path):
 
 def test_vector_store_adds_incrementally_below_the_rebuild_threshold(monkeypatch):
     vectors = clustered_vectors(n=110)
-    store = VectorStore(index_type="ivf", n_lists=8, rebuild_threshold=0.2)
+    store = VectorStore(index_type="ivf", n_lists=8, rebuild_threshold=0.2, ivf_min_vectors=0)
     store.add(make_chunks(100), vectors[:100])
     built = store.index
 
@@ -321,7 +323,7 @@ def test_vector_store_adds_incrementally_below_the_rebuild_threshold(monkeypatch
 
 def test_vector_store_rebuilds_once_drift_exceeds_the_threshold():
     vectors = clustered_vectors(n=200)
-    store = VectorStore(index_type="ivf", n_lists=8, rebuild_threshold=0.2)
+    store = VectorStore(index_type="ivf", n_lists=8, rebuild_threshold=0.2, ivf_min_vectors=0)
     store.add(make_chunks(100), vectors[:100])
 
     store.add(make_chunks(20, prefix="a"), vectors[100:120])  # drift 20/120 <= 0.2: incremental
@@ -334,7 +336,7 @@ def test_vector_store_rebuilds_once_drift_exceeds_the_threshold():
 
 def test_vector_store_rebuild_index_resets_drift():
     vectors = clustered_vectors(n=150)
-    store = VectorStore(index_type="ivf", rebuild_threshold=1.0)
+    store = VectorStore(index_type="ivf", rebuild_threshold=1.0, ivf_min_vectors=0)
     store.add(make_chunks(100), vectors[:100])
     store.add(make_chunks(50, prefix="x"), vectors[100:])
     assert store.index.drift > 0
@@ -343,3 +345,68 @@ def test_vector_store_rebuild_index_resets_drift():
 
     assert store.index.drift == 0.0
     assert store.index.n_lists == 12  # auto n_lists recomputed on the grown corpus (~sqrt(150))
+
+
+# --- backend selection ---------------------------------------------------------
+
+
+def test_a_small_ivf_store_searches_exactly_without_building_an_index(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("no index should be built below ivf_min_vectors")
+
+    monkeypatch.setattr(IVFIndex, "build", fail)
+    vectors = clustered_vectors(n=40)
+    store = VectorStore(index_type="ivf", ivf_min_vectors=50)
+    store.add(make_chunks(40), vectors)
+
+    assert not store.uses_ivf
+    assert store.index is None
+    assert store.is_ready
+    expected, _ = cosine_top_k(vectors, vectors[0], 5)
+    assert [r["id"] for r in store.search(vectors[0], top_k=5)] == [store.chunks[i]["id"] for i in expected]
+
+
+def test_the_index_is_built_once_the_store_reaches_ivf_min_vectors():
+    vectors = clustered_vectors(n=60)
+    store = VectorStore(index_type="ivf", n_lists=6, ivf_min_vectors=50)
+    store.add(make_chunks(40), vectors[:40])
+    store.add(make_chunks(20, prefix="d"), vectors[40:])
+
+    assert store.uses_ivf
+    assert store.index.covers(60)
+
+
+def test_reopening_a_small_store_does_not_build_an_index(tmp_path):
+    VectorStore(path=str(tmp_path), index_type="brute-force").add(make_chunks(40), clustered_vectors(n=40))
+
+    reopened = VectorStore(path=str(tmp_path), index_type="ivf", ivf_min_vectors=50)
+
+    assert reopened.index is None
+    assert not IVFIndex.exists(str(tmp_path))
+
+
+def test_the_backend_and_threshold_come_from_the_configuration(monkeypatch):
+    import dataclasses
+
+    from rag_agent.vectorstore import vector_store as vector_store_module
+
+    config = dataclasses.replace(vector_store_module.config, index_type="ivf", ivf_min_vectors=30, ivf_n_lists=4)
+    monkeypatch.setattr(vector_store_module, "config", config)
+    store = VectorStore()
+    store.add(make_chunks(40), clustered_vectors(n=40))
+
+    assert store.index_type == "ivf"
+    assert store.ivf_min_vectors == 30
+    assert store.index.n_lists == 4
+
+
+def test_reloading_a_store_below_the_threshold_drops_the_previous_index(tmp_path):
+    VectorStore(path=str(tmp_path), index_type="brute-force").add(make_chunks(40), clustered_vectors(n=40))
+    store = VectorStore(index_type="ivf", n_lists=4, ivf_min_vectors=0)
+    store.add(make_chunks(60, prefix="d"), clustered_vectors(n=60, seed=1))
+    store.ivf_min_vectors = 50
+
+    store.load(str(tmp_path))
+
+    assert store.index is None
+    assert store.is_ready
