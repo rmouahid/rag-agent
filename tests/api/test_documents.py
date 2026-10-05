@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from rag_agent.generation.rag_agent import UnsupportedSourceError, source_type
 from rag_agent.ingestion.url_guard import BlockedURLError
+from rag_agent.pipeline import UnsupportedSourceError, source_type
 
 
 @pytest.fixture

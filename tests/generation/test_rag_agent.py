@@ -6,6 +6,7 @@ from rag_agent.generation.rag_agent import RAGAgent
 
 class FakeRetriever:
     chunks = []
+    pipeline = None
 
     def retrieve(self, question, top_k):
         return self.chunks[:top_k]
