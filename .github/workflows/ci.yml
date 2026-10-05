@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, dev]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -21,8 +24,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Same version as the one that generated poetry.lock
       - name: Install Poetry
-        run: pipx install poetry
+        run: pipx install poetry==2.5.1
 
       - name: Use an in-project virtualenv
         run: poetry config virtualenvs.in-project true
