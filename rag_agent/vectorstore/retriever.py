@@ -11,8 +11,8 @@ logger = get_logger(__name__)
 
 class Retriever:
     def __init__(self, chunk_size: int = None, overlap: int = None, chunking_strategy: str = None):
-        self.chunker      = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
-        self.embedder     = Embedder()
+        self.chunker = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
+        self.embedder = Embedder()
         # Recharge le store existant au démarrage (VECTOR_STORE_PATH) : les
         # embeddings déjà calculés ne sont pas recalculés
         self.vector_store = VectorStore(path=config.vector_store_path or None)

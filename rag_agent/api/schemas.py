@@ -88,7 +88,9 @@ class AskResponse(BaseModel):
 class IngestResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
-            "examples": [{"source": "notes.md", "chunks_created": 2, "chunk_ids": ["96944874ef2c880e", "1f0c3a9b2d4e5f60"]}]
+            "examples": [
+                {"source": "notes.md", "chunks_created": 2, "chunk_ids": ["96944874ef2c880e", "1f0c3a9b2d4e5f60"]}
+            ]
         }
     )
 
@@ -99,7 +101,9 @@ class IngestResponse(BaseModel):
 
 class HealthChecks(BaseModel):
     llm: bool = Field(description="Poids du modèle chargés")
-    vector_store: bool = Field(description="Vector store chargé et cohérent (un vecteur par chunk, index IVF construit)")
+    vector_store: bool = Field(
+        description="Vector store chargé et cohérent (un vecteur par chunk, index IVF construit)"
+    )
 
 
 class HealthResponse(BaseModel):

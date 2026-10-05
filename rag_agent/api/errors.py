@@ -20,9 +20,7 @@ logger = get_logger(__name__)
 
 class ErrorResponse(BaseModel):
     error: str = Field(description="Code stable de l'erreur, en snake_case (ex. `unsupported_source`)")
-    detail: Any = Field(
-        description="Explication lisible ; pour `validation_error`, la liste des champs refusés"
-    )
+    detail: Any = Field(description="Explication lisible ; pour `validation_error`, la liste des champs refusés")
 
 
 class APIError(Exception):

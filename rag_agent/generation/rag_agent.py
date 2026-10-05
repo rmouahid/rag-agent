@@ -15,8 +15,7 @@ logger = get_logger(__name__)
 REFUSALS = {
     outcome.NO_DOCUMENTS: " Aucun document indexé. Ingère d'abord des sources.",
     outcome.NO_RELEVANT_CONTEXT: (
-        " Je n'ai trouvé aucun passage assez pertinent dans les documents indexés "
-        "pour répondre à cette question."
+        " Je n'ai trouvé aucun passage assez pertinent dans les documents indexés " "pour répondre à cette question."
     ),
 }
 NO_DOCUMENTS = REFUSALS[outcome.NO_DOCUMENTS]
@@ -39,8 +38,7 @@ def source_type(source: str) -> str:
         if source.lower().endswith(extension):
             return kind
     raise UnsupportedSourceError(
-        f"Unsupported source {source!r}: expected an http(s) URL or a "
-        f"{', '.join(FILE_TYPES)} file"
+        f"Unsupported source {source!r}: expected an http(s) URL or a " f"{', '.join(FILE_TYPES)} file"
     )
 
 
@@ -48,22 +46,16 @@ class RAGAgent:
     def __init__(self, llm: LocalLLM = None, history_turns: int = None, min_relevance_score: float = None):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
-        self.llm       = llm or LocalLLM()
+        self.llm = llm or LocalLLM()
         self.retriever = Retriever()
         # Échanges question/réponse récents rappelés dans le prompt
         self.history_turns = config.history_turns if history_turns is None else history_turns
-        self.history       = []
+        self.history = []
         # En dessous de ce score cosinus, un chunk n'est pas considéré comme
         # une source : mieux vaut ne pas répondre que répondre sans ancrage
-        self.min_relevance_score = (
-            config.min_relevance_score if min_relevance_score is None else min_relevance_score
-        )
+        self.min_relevance_score = config.min_relevance_score if min_relevance_score is None else min_relevance_score
 
-        self.loaders = {
-            "pdf"      : PDFLoader(),
-            "markdown" : MarkdownLoader(),
-            "web"      : WebLoader()
-        }
+        self.loaders = {"pdf": PDFLoader(), "markdown": MarkdownLoader(), "web": WebLoader()}
 
     def ingest(self, source: str, source_name: str = None) -> list[str]:
         """
@@ -96,9 +88,7 @@ class RAGAgent:
         if not relevant:
             return outcome.NO_RELEVANT_CONTEXT, "", []
 
-        prompt, relevant, _ = fit_prompt(
-            question, relevant, history, self.llm.count_tokens, self.llm.prompt_budget
-        )
+        prompt, relevant, _ = fit_prompt(question, relevant, history, self.llm.count_tokens, self.llm.prompt_budget)
         return outcome.ANSWERED, prompt, [Source.from_chunk(c) for c in relevant]
 
     def ask(self, question: str, top_k: int = 5, history: list[dict] = None) -> Answer:
@@ -153,7 +143,7 @@ class RAGAgent:
         """
         if history is None:
             return self.history
-        return history[-2 * self.history_turns:] if self.history_turns > 0 else []
+        return history[-2 * self.history_turns :] if self.history_turns > 0 else []
 
     def _remember(self, question: str, answer: str):
         """
@@ -163,7 +153,7 @@ class RAGAgent:
             {"role": "user", "content": question},
             {"role": "assistant", "content": answer},
         ]
-        self.history = self.history[-2 * self.history_turns:] if self.history_turns > 0 else []
+        self.history = self.history[-2 * self.history_turns :] if self.history_turns > 0 else []
 
     def save(self, path: str = None):
         self.retriever.save(path)

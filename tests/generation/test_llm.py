@@ -24,13 +24,15 @@ class FakeLlama:
         if stream:
             # Same shape as llama-cpp-python's streamed chunks: a role delta,
             # content deltas, then an empty delta with the finish reason
-            return iter([
-                {"choices": [{"delta": {"role": "assistant"}, "finish_reason": None}]},
-                {"choices": [{"delta": {"content": " \n"}, "finish_reason": None}]},
-                {"choices": [{"delta": {"content": " Par"}, "finish_reason": None}]},
-                {"choices": [{"delta": {"content": "is."}, "finish_reason": None}]},
-                {"choices": [{"delta": {}, "finish_reason": "stop"}]},
-            ])
+            return iter(
+                [
+                    {"choices": [{"delta": {"role": "assistant"}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"content": " \n"}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"content": " Par"}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"content": "is."}, "finish_reason": None}]},
+                    {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+                ]
+            )
         return {"choices": [{"message": {"role": "assistant", "content": "  Paris.\n"}}]}
 
 
@@ -67,7 +69,11 @@ def test_settings_default_to_config(weights, monkeypatch):
         llm_module,
         "config",
         llm_module.config.__class__(
-            local_model_path=weights, llm_context_size=1024, llm_max_tokens=64, llm_temperature=0.5, llm_threads=3,
+            local_model_path=weights,
+            llm_context_size=1024,
+            llm_max_tokens=64,
+            llm_temperature=0.5,
+            llm_threads=3,
             llm_context_margin=32,
         ),
     )

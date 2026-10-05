@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["documents"])
 
+
 def _unsupported(error: Exception) -> APIError:
     return APIError(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "unsupported_source", str(error))
 
@@ -23,9 +24,7 @@ def _unsupported(error: Exception) -> APIError:
 def _ingestion_failed(source: str) -> APIError:
     # Cause dans les logs : le message brut peut contenir des chemins du serveur
     logger.exception("Échec de l'ingestion de %s", source)
-    return APIError(
-        status.HTTP_500_INTERNAL_SERVER_ERROR, "ingestion_failed", f"Could not ingest {source!r}."
-    )
+    return APIError(status.HTTP_500_INTERNAL_SERVER_ERROR, "ingestion_failed", f"Could not ingest {source!r}.")
 
 
 def _ingest_upload(agent: RAGAgent, file: UploadFile) -> list[str]:

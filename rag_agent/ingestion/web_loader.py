@@ -26,9 +26,7 @@ class WebLoader:
     """
 
     def __init__(self, allow_private_hosts: bool = None):
-        self.allow_private_hosts = (
-            config.allow_private_urls if allow_private_hosts is None else allow_private_hosts
-        )
+        self.allow_private_hosts = config.allow_private_urls if allow_private_hosts is None else allow_private_hosts
 
     def _fetch(self, url: str) -> requests.Response:
         """
@@ -54,9 +52,7 @@ class WebLoader:
 
         content_type = response.headers.get("Content-Type", "")
         if "html" not in content_type.lower():
-            raise ValueError(
-                f"Type de contenu non supporté pour {url} : '{content_type}' (attendu : text/html)"
-            )
+            raise ValueError(f"Type de contenu non supporté pour {url} : '{content_type}' (attendu : text/html)")
 
         soup = BeautifulSoup(response.text, "html.parser")
 

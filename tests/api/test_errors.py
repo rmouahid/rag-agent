@@ -92,7 +92,7 @@ def test_unexpected_errors_outside_routes_use_the_envelope(lenient_client, agent
 def test_corrupted_upload_is_a_422(client, agent, content, name):
     # The real loaders, without embeddings: they fail while reading
     readers = {".pdf": PDFLoader(), ".md": MarkdownLoader()}
-    agent.ingest = lambda source, source_name=None: readers[source[source.rfind("."):]].load(source)
+    agent.ingest = lambda source, source_name=None: readers[source[source.rfind(".") :]].load(source)
 
     response = client.post("/documents", files={"file": (name, content, "application/octet-stream")})
 

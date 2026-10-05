@@ -205,9 +205,9 @@ def test_recall_grows_with_nprobe_and_is_high_on_clustered_data():
     queries = clustered_vectors(n=50, n_topics=40, seed=7)
 
     def mean_recall(nprobe):
-        return np.mean([
-            recall(index.search(vectors, q, 10, nprobe)[0], cosine_top_k(vectors, q, 10)[0]) for q in queries
-        ])
+        return np.mean(
+            [recall(index.search(vectors, q, 10, nprobe)[0], cosine_top_k(vectors, q, 10)[0]) for q in queries]
+        )
 
     recalls = [mean_recall(p) for p in (1, 4, 16, 40)]
     assert recalls == sorted(recalls)

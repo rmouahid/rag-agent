@@ -103,11 +103,19 @@ def run(corpus: np.ndarray, queries: np.ndarray, k: int, nprobes: list[int], see
         exact_times.append(elapsed)
 
     index, build_time = timed(IVFIndex.build, corpus, None, seed)
-    rows = [{
-        "n": len(corpus), "method": "brute-force", "n_lists": None, "nprobe": None,
-        "recall": 1.0, "p50_ms": 1000 * np.median(exact_times), "p95_ms": 1000 * np.percentile(exact_times, 95),
-        "scanned": 1.0, "build_s": None,
-    }]
+    rows = [
+        {
+            "n": len(corpus),
+            "method": "brute-force",
+            "n_lists": None,
+            "nprobe": None,
+            "recall": 1.0,
+            "p50_ms": 1000 * np.median(exact_times),
+            "p95_ms": 1000 * np.percentile(exact_times, 95),
+            "scanned": 1.0,
+            "build_s": None,
+        }
+    ]
 
     for nprobe in [p for p in nprobes if p <= index.n_lists]:
         recalls, times, scanned = [], [], []
@@ -116,11 +124,19 @@ def run(corpus: np.ndarray, queries: np.ndarray, k: int, nprobes: list[int], see
             recalls.append(len(truth & set(ids.tolist())) / len(truth))
             times.append(elapsed)
             scanned.append(sum(len(index.lists[i]) for i in index.probe(q, nprobe)) / len(corpus))
-        rows.append({
-            "n": len(corpus), "method": "ivf", "n_lists": index.n_lists, "nprobe": nprobe,
-            "recall": float(np.mean(recalls)), "p50_ms": 1000 * np.median(times),
-            "p95_ms": 1000 * np.percentile(times, 95), "scanned": float(np.mean(scanned)), "build_s": build_time,
-        })
+        rows.append(
+            {
+                "n": len(corpus),
+                "method": "ivf",
+                "n_lists": index.n_lists,
+                "nprobe": nprobe,
+                "recall": float(np.mean(recalls)),
+                "p50_ms": 1000 * np.median(times),
+                "p95_ms": 1000 * np.percentile(times, 95),
+                "scanned": float(np.mean(scanned)),
+                "build_s": build_time,
+            }
+        )
     return rows
 
 
@@ -173,10 +189,16 @@ def plot(rows: list[dict], k: int, path: str) -> bool:
     for n in sorted({r["n"] for r in rows}):
         ivf = [r for r in rows if r["n"] == n and r["method"] == "ivf"]
         base = next(r for r in rows if r["n"] == n and r["method"] == "brute-force")
-        line, = ax.plot([r["p50_ms"] for r in ivf], [r["recall"] for r in ivf], marker="o", label=f"IVF, N={n:,}")
+        (line,) = ax.plot([r["p50_ms"] for r in ivf], [r["recall"] for r in ivf], marker="o", label=f"IVF, N={n:,}")
         for r in ivf:
-            ax.annotate(str(r["nprobe"]), (r["p50_ms"], r["recall"]), textcoords="offset points",
-                        xytext=(4, -10), fontsize=7, color=line.get_color())
+            ax.annotate(
+                str(r["nprobe"]),
+                (r["p50_ms"], r["recall"]),
+                textcoords="offset points",
+                xytext=(4, -10),
+                fontsize=7,
+                color=line.get_color(),
+            )
         ax.scatter([base["p50_ms"]], [1.0], marker="*", s=140, color=line.get_color(), zorder=3)
 
     ax.scatter([], [], marker="*", s=140, color="grey", label="brute-force (exact)")

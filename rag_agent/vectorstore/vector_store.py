@@ -66,9 +66,7 @@ class VectorStore:
         """
         True si `path` contient un store sauvegardé
         """
-        return os.path.isfile(os.path.join(path, VECTORS_FILE)) and os.path.isfile(
-            os.path.join(path, CHUNKS_FILE)
-        )
+        return os.path.isfile(os.path.join(path, VECTORS_FILE)) and os.path.isfile(os.path.join(path, CHUNKS_FILE))
 
     @property
     def vectors(self) -> np.ndarray:
@@ -103,9 +101,7 @@ class VectorStore:
         """
         embeddings = np.asarray(embeddings)
         if len(chunks) != len(embeddings):
-            raise ValueError(
-                f"{len(chunks)} chunks but {len(embeddings)} embeddings: they must match one-to-one"
-            )
+            raise ValueError(f"{len(chunks)} chunks but {len(embeddings)} embeddings: they must match one-to-one")
         if len(chunks) == 0:
             return
         if embeddings.ndim != 2:
@@ -122,12 +118,14 @@ class VectorStore:
                 logger.debug("Chunk %s déjà présent dans le store, ignoré", chunk.id)
                 continue
             self._ids.add(chunk.id)
-            self.chunks.append({
-                "id"       : chunk.id,
-                "text"     : chunk.text,
-                "source"   : chunk.source,
-                "metadata" : chunk.metadata,
-            })
+            self.chunks.append(
+                {
+                    "id": chunk.id,
+                    "text": chunk.text,
+                    "source": chunk.source,
+                    "metadata": chunk.metadata,
+                }
+            )
             new_rows.append(i)
 
         if not new_rows:
@@ -158,10 +156,7 @@ class VectorStore:
         else:
             indices, scores = cosine_top_k(self._matrix, query_vector, top_k)
 
-        return [
-            {**self.chunks[idx], "score": float(score)}
-            for idx, score in zip(indices, scores)
-        ]
+        return [{**self.chunks[idx], "score": float(score)} for idx, score in zip(indices, scores)]
 
     def save(self, path: str = None):
         """
@@ -201,9 +196,7 @@ class VectorStore:
             chunks = json.load(f)
 
         if len(chunks) != len(matrix):
-            raise ValueError(
-                f"Corrupt vector store at {path}: {len(matrix)} vectors but {len(chunks)} chunks"
-            )
+            raise ValueError(f"Corrupt vector store at {path}: {len(matrix)} vectors but {len(chunks)} chunks")
 
         self._matrix = matrix if len(matrix) else None
         self.chunks = chunks
@@ -232,7 +225,8 @@ class VectorStore:
         if self.index.drift > self.rebuild_threshold:
             logger.info(
                 "Index IVF : %.0f%% de vecteurs ajoutés depuis la construction (seuil %.0f%%), reconstruction",
-                100 * self.index.drift, 100 * self.rebuild_threshold,
+                100 * self.index.drift,
+                100 * self.rebuild_threshold,
             )
             self.rebuild_index()
 
