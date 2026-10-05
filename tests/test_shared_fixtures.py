@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from rag_agent.ingestion.md_loader import MarkdownLoader
 from rag_agent.ingestion.pdf_loader import PDFLoader
@@ -23,12 +24,8 @@ def test_stub_llm_records_prompts_and_can_fail(stub_llm):
     assert stub_llm.prompts == ["prompt", "again"]
 
     stub_llm.fail = True
-    try:
+    with pytest.raises(RuntimeError):
         stub_llm.generate("boom")
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError("the stub should fail when asked to")
 
 
 def test_sample_documents_load_with_the_real_loaders(sample_markdown, sample_pdf):
