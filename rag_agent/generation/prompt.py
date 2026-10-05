@@ -36,9 +36,7 @@ def format_context(chunks: list[dict]) -> str:
     """
     if not chunks:
         return EMPTY_CONTEXT
-    return CHUNK_SEPARATOR.join(
-        CHUNK_TEMPLATE.format(source=c["source"], text=c["text"]) for c in chunks
-    )
+    return CHUNK_SEPARATOR.join(CHUNK_TEMPLATE.format(source=c["source"], text=c["text"]) for c in chunks)
 
 
 def format_history(history: list[dict]) -> str:
@@ -48,9 +46,7 @@ def format_history(history: list[dict]) -> str:
     """
     if not history:
         return ""
-    turns = "\n".join(
-        f"{ROLE_LABELS.get(turn['role'], turn['role'])} : {turn['content']}" for turn in history
-    )
+    turns = "\n".join(f"{ROLE_LABELS.get(turn['role'], turn['role'])} : {turn['content']}" for turn in history)
     return HISTORY_TEMPLATE.format(turns=turns)
 
 

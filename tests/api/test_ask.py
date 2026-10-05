@@ -102,7 +102,9 @@ def test_questions_are_answered_one_at_a_time(client, agent):
         return Answer(text="ok")
 
     agent.ask = ask
-    threads = [threading.Thread(target=client.post, args=("/ask",), kwargs={"json": {"question": "q"}}) for _ in range(4)]
+    threads = [
+        threading.Thread(target=client.post, args=("/ask",), kwargs={"json": {"question": "q"}}) for _ in range(4)
+    ]
     for t in threads:
         t.start()
     for t in threads:

@@ -22,7 +22,5 @@ class Chunk:
             self.id = self._compute_id()
 
     def _compute_id(self) -> str:
-        digest = hashlib.sha256(
-            f"{self.source}:{self.position}:{self.text}".encode()
-        )
+        digest = hashlib.sha256(f"{self.source}:{self.position}:{self.text}".encode())
         return digest.hexdigest()[:16]

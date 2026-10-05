@@ -221,8 +221,10 @@ def test_a_given_history_is_capped_to_the_last_turns():
     FakeRetriever.chunks = [{"source": "a.md", "text": "text", "score": 0.9}]
     llm = FakeLLM()
     given = [
-        {"role": "user", "content": "old question"}, {"role": "assistant", "content": "old answer"},
-        {"role": "user", "content": "recent question"}, {"role": "assistant", "content": "recent answer"},
+        {"role": "user", "content": "old question"},
+        {"role": "assistant", "content": "old answer"},
+        {"role": "user", "content": "recent question"},
+        {"role": "assistant", "content": "recent answer"},
     ]
 
     RAGAgent(llm=llm, history_turns=1).ask("now?", history=given)

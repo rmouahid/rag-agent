@@ -66,7 +66,7 @@ def _shingles(text: str, k: int = _SHINGLE_SIZE) -> set[str]:
     words = text.split()
     if len(words) < k:
         return {text} if text else set()
-    return {" ".join(words[i:i + k]) for i in range(len(words) - k + 1)}
+    return {" ".join(words[i : i + k]) for i in range(len(words) - k + 1)}
 
 
 def _jaccard(a: set, b: set) -> float:

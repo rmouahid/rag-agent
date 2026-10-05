@@ -94,7 +94,9 @@ class IVFIndex:
 
         logger.info(
             "Index IVF construit : %d vecteurs, %d listes (k-means : %d itérations)",
-            len(vectors), n_lists, result.n_iter,
+            len(vectors),
+            n_lists,
+            result.n_iter,
         )
         return cls(result.centroids, lists)
 
@@ -165,7 +167,9 @@ class IVFIndex:
         for list_no in np.unique(labels):
             self.lists[list_no] = np.concatenate([self.lists[list_no], ids[labels == list_no]])
         self.n_added += len(ids)
-        logger.debug("Index IVF : %d vecteur(s) ajouté(s) sans reconstruction (dérive %.0f%%)", len(ids), 100 * self.drift)
+        logger.debug(
+            "Index IVF : %d vecteur(s) ajouté(s) sans reconstruction (dérive %.0f%%)", len(ids), 100 * self.drift
+        )
 
     def probe(self, query: np.ndarray, nprobe: int) -> np.ndarray:
         """
@@ -197,9 +201,7 @@ class IVFIndex:
         """
         query = np.asarray(query)
         if query.shape != (self.centroids.shape[1],):
-            raise ValueError(
-                f"query shape {query.shape} does not match vector dimension {self.centroids.shape[1]}"
-            )
+            raise ValueError(f"query shape {query.shape} does not match vector dimension {self.centroids.shape[1]}")
 
         probed = [self.lists[i] for i in self.probe(query, nprobe)]
         candidates = np.sort(np.concatenate(probed))

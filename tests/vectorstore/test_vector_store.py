@@ -14,10 +14,7 @@ DIM = 4
 
 
 def make_chunks(*texts, source="doc.md", metadata=None):
-    return [
-        Chunk(text=t, source=source, position=i * 100, metadata=dict(metadata or {}))
-        for i, t in enumerate(texts)
-    ]
+    return [Chunk(text=t, source=source, position=i * 100, metadata=dict(metadata or {})) for i, t in enumerate(texts)]
 
 
 def make_vectors(n, offset=0):

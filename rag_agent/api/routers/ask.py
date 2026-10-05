@@ -59,9 +59,9 @@ STREAM_RESPONSES = {
     status.HTTP_200_OK: {
         "description": (
             "Flux `text/event-stream` : un événement `sources` (`status` et `sources`, "
-            "comme `/ask`), puis un `token` par morceau de texte (`{\"text\": ...}`), "
-            "puis `done` (`{\"answer\": <texte complet>}`). Une erreur pendant la "
-            "génération arrive comme un événement `error` (`{\"error\", \"detail\"}`) "
+            'comme `/ask`), puis un `token` par morceau de texte (`{"text": ...}`), '
+            'puis `done` (`{"answer": <texte complet>}`). Une erreur pendant la '
+            'génération arrive comme un événement `error` (`{"error", "detail"}`) '
             "qui termine le flux."
         ),
         "content": {"text/event-stream": {"schema": {"type": "string"}}},

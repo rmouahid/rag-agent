@@ -43,7 +43,9 @@ def test_tokens_are_streamed_as_server_sent_events(client, streamed):
             "sources",
             {
                 "status": "answered",
-                "sources": [{"source": "france.md", "excerpt": "Paris is the capital.", "chunk_id": "c1", "score": 0.82}],
+                "sources": [
+                    {"source": "france.md", "excerpt": "Paris is the capital.", "chunk_id": "c1", "score": 0.82}
+                ],
             },
         ),
         ("token", {"text": "Par"}),

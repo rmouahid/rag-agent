@@ -59,9 +59,7 @@ class Answer:
         """
         Liste numérotée des sources, une par ligne ; vide sans source
         """
-        return "\n".join(
-            f"[{i}] {s.source} — {s.excerpt}" for i, s in enumerate(self.sources, start=1)
-        )
+        return "\n".join(f"[{i}] {s.source} — {s.excerpt}" for i, s in enumerate(self.sources, start=1))
 
 
 @dataclass(frozen=True)

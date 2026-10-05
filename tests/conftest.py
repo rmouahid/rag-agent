@@ -92,9 +92,7 @@ def offline_embeddings(monkeypatch):
     no on-disk embedding cache
     """
     monkeypatch.setattr(embedder_module, "SentenceTransformer", BagOfWordsModel)
-    monkeypatch.setattr(
-        embedder_module, "config", dataclasses.replace(embedder_module.config, embedding_cache_dir="")
-    )
+    monkeypatch.setattr(embedder_module, "config", dataclasses.replace(embedder_module.config, embedding_cache_dir=""))
 
 
 @pytest.fixture

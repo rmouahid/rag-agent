@@ -31,17 +31,17 @@ def test_public_address_is_allowed(resolves_to):
 @pytest.mark.parametrize(
     "address",
     [
-        "127.0.0.1",        # loopback
-        "10.0.0.5",         # RFC 1918
+        "127.0.0.1",  # loopback
+        "10.0.0.5",  # RFC 1918
         "172.16.3.4",
         "192.168.1.10",
         "169.254.169.254",  # link-local, cloud metadata
-        "100.64.0.1",       # shared address space (CGNAT)
+        "100.64.0.1",  # shared address space (CGNAT)
         "0.0.0.0",
         "::1",
         "fe80::1%eth0",
-        "fd00::1",          # unique local
-        "::ffff:127.0.0.1", # IPv4-mapped loopback
+        "fd00::1",  # unique local
+        "::ffff:127.0.0.1",  # IPv4-mapped loopback
     ],
 )
 def test_non_public_addresses_are_refused(resolves_to, address):
