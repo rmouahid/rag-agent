@@ -2,9 +2,9 @@ from rag_agent.chunking.dedup import deduplicate_chunks
 from rag_agent.chunking.factory import get_chunker
 from rag_agent.config import config
 from rag_agent.ingestion.document import Document
+from rag_agent.logging_config import get_logger
 from rag_agent.vectorstore.embedder import Embedder
 from rag_agent.vectorstore.vector_store import VectorStore
-from rag_agent.logging_config import get_logger
 
 logger = get_logger(__name__)
 

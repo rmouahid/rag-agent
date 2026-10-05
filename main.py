@@ -1,8 +1,9 @@
 import sys
 
 from rag_agent.generation.llm import ModelNotFoundError
-from rag_agent.generation.truncation import ContextOverflowError
 from rag_agent.generation.rag_agent import RAGAgent
+from rag_agent.generation.truncation import ContextOverflowError
+
 
 def main():
     print("=" * 50)

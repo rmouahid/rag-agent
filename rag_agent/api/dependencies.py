@@ -13,7 +13,6 @@ from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.vectorstore.vector_store import VectorStore
 
-
 # Un seul appel à l'agent à la fois : llama.cpp n'accepte pas de générations
 # concurrentes sur le même modèle, et le vector store (index IVF compris)
 # n'est pas protégé contre une ingestion pendant une recherche.

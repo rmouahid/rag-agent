@@ -9,7 +9,7 @@ Si le prompt ne tient toujours pas, `ContextOverflowError` est levée :
 retirer le dernier chunk donnerait une réponse sans ancrage.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 from rag_agent.generation.prompt import build_prompt
 from rag_agent.logging_config import get_logger

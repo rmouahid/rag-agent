@@ -3,8 +3,8 @@ import os
 
 import numpy as np
 
-from rag_agent.logging_config import get_logger
 from rag_agent.config import config
+from rag_agent.logging_config import get_logger
 from rag_agent.vectorstore.brute_force import cosine_top_k
 from rag_agent.vectorstore.ivf import IVFIndex
 
@@ -197,7 +197,7 @@ class VectorStore:
             raise ValueError("No path to load the vector store from: pass one or set it in the constructor")
 
         matrix = np.load(os.path.join(path, VECTORS_FILE), allow_pickle=False)
-        with open(os.path.join(path, CHUNKS_FILE), "r", encoding="utf-8") as f:
+        with open(os.path.join(path, CHUNKS_FILE), encoding="utf-8") as f:
             chunks = json.load(f)
 
         if len(chunks) != len(matrix):

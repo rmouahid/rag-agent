@@ -123,7 +123,7 @@ def kmeans(
     threshold = tol * float(np.mean(np.std(vectors, axis=0)))
     converged = False
 
-    for n_iter in range(1, max_iter + 1):
+    for n_iter in range(1, max_iter + 1):  # noqa: B007 (read after the loop)
         labels, distances = assign(vectors, centroids)
 
         # Étape de mise à jour : moyenne des points de chaque cluster

@@ -1,5 +1,5 @@
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator
 
 EXCERPT_LENGTH = 200
 
