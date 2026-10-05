@@ -42,5 +42,12 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      # Same checks as the pre-commit hooks, in case one was bypassed
+      - name: Lint
+        run: poetry run ruff check .
+
+      - name: Check formatting
+        run: poetry run black --check .
+
       - name: Run tests
         run: poetry run pytest -q
