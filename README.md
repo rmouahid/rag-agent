@@ -376,6 +376,23 @@ agent for a fake, and `test_integration.py` runs the real `RAGAgent`
 (loaders, chunking, vector store, relevance filter, prompt fitting) with
 these fixtures, from upload to streamed answer, error paths included.
 
+## Code style
+
+[black](https://black.readthedocs.io/) formats the code and
+[ruff](https://docs.astral.sh/ruff/) lints it (configuration in
+`pyproject.toml`, 120-character lines). Install the git hooks once:
+
+```bash
+poetry run pre-commit install
+```
+
+They then run on every commit. CI runs the same checks, so a commit made
+with `--no-verify` is still caught. To check everything by hand:
+
+```bash
+poetry run pre-commit run --all-files
+```
+
 ## License
 
 [MIT](LICENSE)
