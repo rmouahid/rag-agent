@@ -417,6 +417,13 @@ agent for a fake, and `test_integration.py` runs the real `RAGAgent`
 (loaders, chunking, vector store, relevance filter, prompt fitting) with
 these fixtures, from upload to streamed answer, error paths included.
 
+`tests/test_end_to_end.py` checks answer quality end to end, once per
+search backend (brute force, and IVF with 2 of 4 lists probed): it ingests
+`tests/fixtures/knowledge.md` (five unrelated topics) and asks questions
+whose answers are written in it. An extractive stand-in model answers
+with the context sentence closest to the question, so the expected fact
+only appears in the answer when retrieval put the right passage first.
+
 ## Code style
 
 [black](https://black.readthedocs.io/) formats the code and
