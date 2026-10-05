@@ -1,5 +1,7 @@
 # RAG Agent
 
+[![CI](https://github.com/rmouahid/rag-agent/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/rmouahid/rag-agent/actions/workflows/ci.yml)
+
 A minimal but precise Retrieval-Augmented Generation (RAG) agent built from scratch in Python — no LangChain, no managed vector database, no external ANN library.
 
 ## Features
