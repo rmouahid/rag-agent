@@ -21,20 +21,31 @@ from rag_agent.pipeline import FILE_TYPES
 from rag_agent.vectorstore.retriever import Retriever
 
 
-def _sources(paths: list[str]) -> Iterator[str]:
+def _files_in(folder: str) -> list[str]:
     """
-    Les URL et fichiers tels quels ; les dossiers, parcourus récursivement,
-    donnent leurs fichiers d'un type pris en charge, triés
+    Fichiers d'un type pris en charge sous `folder`, récursivement, triés
+    """
+    found = []
+    for root, dirs, files in os.walk(folder):
+        dirs.sort()
+        found += [os.path.join(root, name) for name in sorted(files) if name.lower().endswith(tuple(FILE_TYPES))]
+    return found
+
+
+def _sources(paths: list[str]) -> Iterator[str | None]:
+    """
+    Les URL et fichiers tels quels, les dossiers remplacés par leurs
+    fichiers ; None pour un dossier qui n'en contient aucun (signalé)
     """
     for path in paths:
-        if os.path.isdir(path):
-            for root, dirs, files in os.walk(path):
-                dirs.sort()
-                for name in sorted(files):
-                    if name.lower().endswith(tuple(FILE_TYPES)):
-                        yield os.path.join(root, name)
-        else:
+        if not os.path.isdir(path):
             yield path
+            continue
+        files = _files_in(path)
+        if not files:
+            print(f"{path}: no {', '.join(FILE_TYPES)} file found", file=sys.stderr)
+            yield None
+        yield from files
 
 
 def ingest(args: argparse.Namespace) -> int:
@@ -46,6 +57,9 @@ def ingest(args: argparse.Namespace) -> int:
 
     failures = 0
     for source in _sources(args.sources):
+        if source is None:
+            failures += 1
+            continue
         if not source.startswith(("http://", "https://")) and not os.path.exists(source):
             print(f"{source}: no such file or directory", file=sys.stderr)
             failures += 1

@@ -116,3 +116,12 @@ def test_a_command_is_required(capsys):
     with pytest.raises(SystemExit) as exit_info:
         cli.main([])
     assert exit_info.value.code == 2
+
+
+def test_a_folder_without_supported_files_is_reported(vector_store_dir, tmp_path, capsys):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "notes.txt").write_text("ignored")
+
+    assert cli.main(["ingest", str(empty)]) == 1
+    assert "no .pdf, .md, .markdown file" in capsys.readouterr().err
