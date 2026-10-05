@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 from rag_agent.config import config
 from rag_agent.ingestion.document import Document
-from rag_agent.ingestion.url_guard import BlockedURLError, check_url
+from rag_agent.ingestion.url_guard import check_url
 from rag_agent.logging_config import get_logger
 
 logger = get_logger(__name__)

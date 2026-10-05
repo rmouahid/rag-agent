@@ -7,8 +7,8 @@ Le RAGAgent (poids du LLM, vector store) est construit une seule fois au
 démarrage et partagé par toutes les requêtes.
 """
 
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Callable
 
 from fastapi import FastAPI
 

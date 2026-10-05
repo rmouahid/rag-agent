@@ -3,11 +3,11 @@ from rag_agent.generation import answer as outcome
 from rag_agent.generation.answer import Answer, Source, StreamingAnswer
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.truncation import fit_prompt
-from rag_agent.vectorstore.retriever import Retriever
-from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.md_loader import MarkdownLoader
+from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.web_loader import WebLoader
 from rag_agent.logging_config import get_logger
+from rag_agent.vectorstore.retriever import Retriever
 
 logger = get_logger(__name__)
 

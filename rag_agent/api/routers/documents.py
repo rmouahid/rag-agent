@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from pymupdf import FileDataError
 
@@ -36,7 +37,7 @@ def _ingest_upload(agent: RAGAgent, file: UploadFile) -> list[str]:
     try:
         source_type(name)
     except UnsupportedSourceError as e:
-        raise _unsupported(e)
+        raise _unsupported(e) from e
 
     suffix = os.path.splitext(name)[1]
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -51,9 +52,9 @@ def _ingest_upload(agent: RAGAgent, file: UploadFile) -> list[str]:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "unreadable_file",
             f"Could not read {name!r}: the file is corrupted or not a valid {suffix} file.",
-        )
-    except Exception:
-        raise _ingestion_failed(name)
+        ) from e
+    except Exception as e:
+        raise _ingestion_failed(name) from e
     finally:
         os.unlink(tmp.name)
 
@@ -65,16 +66,16 @@ def _ingest_url(agent: RAGAgent, url: str) -> list[str]:
         with agent_lock:
             return agent.ingest(url)
     except UnsupportedSourceError as e:
-        raise _unsupported(e)
+        raise _unsupported(e) from e
     except BlockedURLError as e:
-        raise APIError(status.HTTP_400_BAD_REQUEST, "blocked_url", str(e))
+        raise APIError(status.HTTP_400_BAD_REQUEST, "blocked_url", str(e)) from e
     except ConnectionError as e:
-        raise APIError(status.HTTP_502_BAD_GATEWAY, "source_unreachable", str(e))
+        raise APIError(status.HTTP_502_BAD_GATEWAY, "source_unreachable", str(e)) from e
     except ValueError as e:
         # Page atteinte mais contenu non HTML
-        raise _unsupported(e)
-    except Exception:
-        raise _ingestion_failed(url)
+        raise _unsupported(e) from e
+    except Exception as e:
+        raise _ingestion_failed(url) from e
 
 
 @router.post(

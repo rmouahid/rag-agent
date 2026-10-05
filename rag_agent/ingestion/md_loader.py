@@ -27,7 +27,7 @@ class MarkdownLoader:
     """
 
     def load(self, path: str) -> Document:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             raw = f.read()
 
         text, headings = self._parse(raw)

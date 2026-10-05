@@ -35,7 +35,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
 
 from rag_agent.vectorstore.brute_force import cosine_top_k  # noqa: E402
-from rag_agent.vectorstore.ivf import IVFIndex, normalize  # noqa: E402
+from rag_agent.vectorstore.ivf import IVFIndex  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "benchmarks")
 
@@ -132,7 +132,7 @@ def to_markdown(rows: list[dict], args, source: str) -> str:
         "",
         f"- Data: {source}",
         f"- {args.queries} queries, recall@{args.k} measured against the exact brute-force top-{args.k}",
-        f"- Latency: one query at a time, median (p50) and 95th percentile (p95)",
+        "- Latency: one query at a time, median (p50) and 95th percentile (p95)",
         f"- Machine: {platform.processor() or platform.machine()}, {os.cpu_count()} CPU, "
         f"Python {platform.python_version()}, numpy {np.__version__}",
         "",

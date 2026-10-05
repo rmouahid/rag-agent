@@ -1,5 +1,5 @@
 import json
-from typing import Iterator
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
@@ -48,9 +48,9 @@ def ask(request: AskRequest, agent: RAGAgent = Depends(get_agent)) -> AskRespons
         with agent_lock:
             answer = agent.ask(request.question.strip(), top_k=request.top_k, history=history)
     except ContextOverflowError as e:
-        raise APIError(status.HTTP_422_UNPROCESSABLE_ENTITY, "context_overflow", str(e))
-    except Exception:
-        raise generation_failed()
+        raise APIError(status.HTTP_422_UNPROCESSABLE_ENTITY, "context_overflow", str(e)) from e
+    except Exception as e:
+        raise generation_failed() from e
     return to_response(answer)
 
 
