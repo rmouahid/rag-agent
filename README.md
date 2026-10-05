@@ -195,6 +195,29 @@ This project is under active development. The full plan — local LLM migration,
 poetry install
 ```
 
+### Command line
+
+`poetry install` also installs a `rag-agent` command, for local use and quick
+manual testing without running the API:
+
+```bash
+poetry run rag-agent ingest docs/ report.pdf https://example.com/page
+poetry run rag-agent ask "Who built the Eiffel Tower?"
+poetry run rag-agent ask --top-k 3 "How tall is it?"
+```
+
+- `ingest` takes files, folders (searched recursively for `.pdf`, `.md`
+  and `.markdown` files) and http(s) URLs, and prints for each source the
+  chunks indexed and the duplicates skipped. It only loads the embedding
+  model, not the LLM, so it is quick. A source that fails is reported and
+  the others are still ingested; the exit code is then `1`.
+- `ask` streams the answer, then lists its sources. Without relevant
+  indexed passages it says so instead of calling the model.
+
+Both use the vector store at `VECTOR_STORE_PATH`, the one the API and
+`python main.py` (interactive ingestion then chat) use too: documents
+ingested from the command line are available to the service.
+
 ### Run the API
 
 The HTTP service is a FastAPI app served by uvicorn:
