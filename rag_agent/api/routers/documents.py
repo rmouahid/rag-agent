@@ -8,9 +8,10 @@ from pymupdf import FileDataError
 from rag_agent.api.dependencies import agent_lock, get_agent
 from rag_agent.api.errors import APIError, error_responses
 from rag_agent.api.schemas import IngestResponse
-from rag_agent.generation.rag_agent import RAGAgent, UnsupportedSourceError, source_type
+from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.ingestion.url_guard import BlockedURLError
 from rag_agent.logging_config import get_logger
+from rag_agent.pipeline import UnsupportedSourceError, source_type
 
 logger = get_logger(__name__)
 

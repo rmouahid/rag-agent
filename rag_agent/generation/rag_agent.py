@@ -3,10 +3,8 @@ from rag_agent.generation import answer as outcome
 from rag_agent.generation.answer import Answer, Source, StreamingAnswer
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.truncation import fit_prompt
-from rag_agent.ingestion.md_loader import MarkdownLoader
-from rag_agent.ingestion.pdf_loader import PDFLoader
-from rag_agent.ingestion.web_loader import WebLoader
 from rag_agent.logging_config import get_logger
+from rag_agent.pipeline import UnsupportedSourceError, source_type  # noqa: F401 (re-exported)
 from rag_agent.vectorstore.retriever import Retriever
 
 logger = get_logger(__name__)
@@ -19,27 +17,6 @@ REFUSALS = {
     ),
 }
 NO_DOCUMENTS = REFUSALS[outcome.NO_DOCUMENTS]
-
-# Extension de fichier → loader
-FILE_TYPES = {".pdf": "pdf", ".md": "markdown", ".markdown": "markdown"}
-
-
-class UnsupportedSourceError(ValueError):
-    """Ni une URL http(s), ni un fichier d'un type pris en charge."""
-
-
-def source_type(source: str) -> str:
-    """
-    Loader à utiliser pour `source` : "web", "pdf" ou "markdown"
-    """
-    if source.startswith(("http://", "https://")):
-        return "web"
-    for extension, kind in FILE_TYPES.items():
-        if source.lower().endswith(extension):
-            return kind
-    raise UnsupportedSourceError(
-        f"Unsupported source {source!r}: expected an http(s) URL or a " f"{', '.join(FILE_TYPES)} file"
-    )
 
 
 class RAGAgent:
@@ -55,22 +32,19 @@ class RAGAgent:
         # une source : mieux vaut ne pas répondre que répondre sans ancrage
         self.min_relevance_score = config.min_relevance_score if min_relevance_score is None else min_relevance_score
 
-        self.loaders = {"pdf": PDFLoader(), "markdown": MarkdownLoader(), "web": WebLoader()}
+        # Ingestion : source → chunks indexés dans le store du retriever
+        self.pipeline = self.retriever.pipeline
 
     def ingest(self, source: str, source_name: str = None) -> list[str]:
         """
-        Détecte automatiquement le type de source et l'ingère.
+        Ingère une source (fichier PDF/Markdown ou URL, type détecté
+        automatiquement) par le pipeline d'ingestion.
 
         `source_name` remplace la source enregistrée avec les chunks — pour
         un fichier reçu par l'API, stocké sous un nom temporaire. Retourne
         les ids des chunks nouvellement indexés.
         """
-        loader = self.loaders[source_type(source)]
-        data = loader.load(source)
-        if source_name:
-            data.source = source_name
-
-        return self.retriever.ingest(data)
+        return self.pipeline.ingest(source, source_name=source_name).chunk_ids
 
     def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[str, str, list[Source]]:
         """

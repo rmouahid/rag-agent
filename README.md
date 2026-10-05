@@ -26,8 +26,18 @@ rag_agent/
 ├── chunking/     # Text chunking
 ├── vectorstore/  # Embeddings, vector store, retrieval
 ├── generation/   # LLM-backed answer generation (RAGAgent)
-└── api/          # FastAPI service (app, routers, dependencies)
+├── api/          # FastAPI service (app, routers, dependencies)
+└── pipeline.py   # Ingestion pipeline: source → indexed, searchable chunks
 ```
+
+Ingestion goes through a single entry point, `IngestionPipeline`:
+source → loader (picked from the file extension or URL) → chunker →
+deduplication (against the batch and the indexed corpus) → embeddings →
+vector store. `pipeline.ingest(path_or_url)` returns an `IngestionResult`
+(new chunk ids, chunks produced, duplicates skipped);
+`pipeline.ingest_document(document)` takes an already-loaded `Document`.
+`RAGAgent` owns one, sharing the retriever's chunker, embedder and store,
+so the CLI and the `POST /documents` endpoint both ingest through it.
 
 Import everything via `rag_agent.*`, e.g. `from rag_agent.generation.rag_agent import RAGAgent`.
 
