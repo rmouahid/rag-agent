@@ -28,9 +28,30 @@ priority = "explicit"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"
 httpx = "^0.27"
+black = "^26.10.0"
+ruff = "^0.16.10"
+pre-commit = "^4.6.2"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# pycodestyle errors, pyflakes, import sorting, pyupgrade, bugbear
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+ignore = [
+    # FastAPI declares dependencies as default arguments (Depends, File, Form, Query)
+    "B008",
+    # zip(strict=True) would change behaviour; lengths are checked where it matters
+    "B905",
+]
 
 [build-system]
 requires = ["poetry-core"]

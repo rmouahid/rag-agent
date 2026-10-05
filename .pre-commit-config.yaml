@@ -1,0 +1,14 @@
+# Install once with `poetry run pre-commit install`. Same versions as the
+# dev dependencies in pyproject.toml, which also holds the configuration;
+# CI runs the same checks, so a bypassed hook is still caught.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.10.0
+    hooks:
+      - id: black
