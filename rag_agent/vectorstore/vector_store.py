@@ -23,6 +23,7 @@ class VectorStore:
         n_lists: int = None,
         nprobe: int = None,
         rebuild_threshold: float = None,
+        ivf_min_vectors: int = None,
     ):
         """
         Stockage en mémoire, optionnellement persisté sur disque :
@@ -43,6 +44,10 @@ class VectorStore:
         rebuild_threshold : part maximale de vecteurs ajoutés incrémentalement
         dans l'index IVF avant une reconstruction complète (défaut :
         IVF_REBUILD_THRESHOLD de la config ; voir `add`).
+        ivf_min_vectors : en dessous de ce nombre de vecteurs, un store "ivf"
+        cherche en brute-force (exact, et assez rapide à cette taille) et
+        ne construit pas d'index ; il est construit au premier `add` qui
+        atteint le seuil (défaut : IVF_MIN_VECTORS de la config).
         """
         index_type = index_type or config.index_type
         if index_type not in INDEX_TYPES:
@@ -53,6 +58,7 @@ class VectorStore:
         self.n_lists = config.ivf_n_lists if n_lists is None else n_lists
         self.nprobe = nprobe or config.nprobe
         self.rebuild_threshold = config.ivf_rebuild_threshold if rebuild_threshold is None else rebuild_threshold
+        self.ivf_min_vectors = config.ivf_min_vectors if ivf_min_vectors is None else ivf_min_vectors
         self.index = None
         self._matrix = None
         self.chunks = []
@@ -78,14 +84,23 @@ class VectorStore:
         return len(self.chunks)
 
     @property
+    def uses_ivf(self) -> bool:
+        """
+        Recherche par l'index IVF : store "ivf" d'au moins `ivf_min_vectors`
+        vecteurs. En dessous, le surcoût de l'index (k-means, perte de
+        recall) ne vaut pas le gain sur un scan exact
+        """
+        return self.index_type == "ivf" and self._matrix is not None and len(self._matrix) >= self.ivf_min_vectors
+
+    @property
     def is_ready(self) -> bool:
         """
         Prêt à être interrogé : un vecteur par chunk, et l'index IVF construit
-        dès que le store n'est pas vide
+        quand la recherche passe par lui
         """
         if len(self.vectors) != len(self.chunks):
             return False
-        return self.index_type != "ivf" or self._matrix is None or self.index is not None
+        return not self.uses_ivf or self.index is not None
 
     def add(self, chunks: list, embeddings: np.ndarray):
         """
@@ -135,7 +150,7 @@ class VectorStore:
         first_id = 0 if self._matrix is None else len(self._matrix)
         self._matrix = new_vectors if self._matrix is None else np.vstack([self._matrix, new_vectors])
 
-        if self.index_type == "ivf":
+        if self.uses_ivf:
             self._update_index(new_vectors, first_id)
 
         if self.path:
@@ -151,7 +166,7 @@ class VectorStore:
         if self._matrix is None:
             return []
 
-        if self.index is not None:
+        if self.uses_ivf and self.index is not None:
             indices, scores = self.index.search(self._matrix, query_vector, top_k, nprobe or self.nprobe)
         else:
             indices, scores = cosine_top_k(self._matrix, query_vector, top_k)
@@ -203,7 +218,8 @@ class VectorStore:
         self._ids = {c["id"] for c in chunks}
         logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))
 
-        if self.index_type == "ivf":
+        self.index = None
+        if self.uses_ivf:
             self._load_index(path)
 
     def rebuild_index(self):
@@ -219,6 +235,11 @@ class VectorStore:
 
     def _update_index(self, new_vectors: np.ndarray, first_id: int):
         if self.index is None:
+            logger.info(
+                "%d vecteurs (seuil IVF_MIN_VECTORS = %d) : construction de l'index IVF",
+                len(self._matrix),
+                self.ivf_min_vectors,
+            )
             self.rebuild_index()
             return
         self.index.add(new_vectors, np.arange(first_id, first_id + len(new_vectors)))

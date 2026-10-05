@@ -187,7 +187,7 @@ def test_a_store_whose_vectors_and_chunks_disagree_is_not_ready():
 
 
 def test_an_ivf_store_without_its_index_is_not_ready():
-    store = VectorStore(index_type="ivf")
+    store = VectorStore(index_type="ivf", ivf_min_vectors=0)
     store.add(make_chunks("a", "b", "c"), make_vectors(3))
     assert store.is_ready
     store.index = None

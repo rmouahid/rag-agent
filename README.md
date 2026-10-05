@@ -98,6 +98,14 @@ Two search backends, selected with `INDEX_TYPE` (see `.env.example`):
 The index is persisted next to the store (`ivf_index.npz`) and reloaded on
 startup; a missing or out-of-sync index is rebuilt automatically.
 
+With `INDEX_TYPE=ivf`, a store smaller than **`IVF_MIN_VECTORS`** (default
+`10000`) still searches by brute force and builds no index: at that size an
+exact scan takes a few milliseconds (2 ms at 5,000 vectors in the
+[benchmark](docs/benchmarks/ivf.md)), so the index would only cost recall
+(0.79 at `NPROBE=8`) for no noticeable gain. The index is built by the
+ingestion that reaches the threshold, and the store switches to it from
+then on. Set `IVF_MIN_VECTORS=0` to use the index at any size.
+
 - **`IVF_NLIST`**: number of lists. `0` (default) picks about `sqrt(N)`.
 - **`NPROBE`**: lists scanned per query, which trades speed for recall. Higher
   values give better recall but slower queries, and `NPROBE = IVF_NLIST` returns
