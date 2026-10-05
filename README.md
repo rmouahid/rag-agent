@@ -360,11 +360,21 @@ poetry run pytest
 ```
 
 The suite needs neither the GGUF weights nor network access, so it runs as
-is in CI. API tests (`tests/api/`) use FastAPI's `TestClient`: unit tests
-swap the agent for a fake, and `test_integration.py` runs the real
-`RAGAgent` (loaders, chunking, vector store, relevance filter, prompt
-fitting) with a stub LLM and a bag-of-words embedding model, from upload
-to streamed answer, error paths included.
+is in CI. `tests/` mirrors the package (`ingestion/`, `chunking/`,
+`vectorstore/`, `generation/`, `api/`). `tests/conftest.py` holds the
+fixtures shared by every folder:
+
+| Fixture | Provides |
+|---|---|
+| `stub_llm` | LLM stand-in: fixed answer, records each prompt, `fail = True` makes it raise |
+| `offline_embeddings` | Bag-of-words model instead of sentence-transformers (no download, similarity still meaningful) |
+| `vector_store_dir` | Empty temporary `VECTOR_STORE_PATH`, with offline embeddings |
+| `eiffel_text`, `sample_markdown`, `sample_pdf`, `make_pdf` | Sample documents, as text, files or in-memory PDFs |
+
+API tests (`tests/api/`) use FastAPI's `TestClient`: unit tests swap the
+agent for a fake, and `test_integration.py` runs the real `RAGAgent`
+(loaders, chunking, vector store, relevance filter, prompt fitting) with
+these fixtures, from upload to streamed answer, error paths included.
 
 ## License
 

@@ -1,99 +1,27 @@
 """
 End-to-end API tests: the real RAGAgent (loaders, chunking, deduplication,
 vector store, relevance filter, prompt fitting) behind the real app, with
-two stand-ins so the suite runs anywhere, CI included:
-- the LLM, which would need the GGUF weights;
-- the sentence-transformers model, which would be downloaded. A
-  bag-of-words model keeps similarity meaningful: texts sharing words are
-  close, texts sharing none are orthogonal.
+the stub LLM and offline embeddings of tests/conftest.py, so the suite
+runs anywhere, CI included.
 """
 
-import dataclasses
 import json
-import re
-import zlib
 
-import numpy as np
-import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 
 from rag_agent.api.app import create_app
 from rag_agent.generation.rag_agent import RAGAgent
-from rag_agent.vectorstore import embedder as embedder_module
-from rag_agent.vectorstore import retriever as retriever_module
-
-EIFFEL = (
-    "# Eiffel Tower\n\n"
-    "The Eiffel Tower was built by Gustave Eiffel's company for the 1889 World's Fair in Paris. "
-    "The tower is 330 metres tall and was the tallest structure in the world until 1930.\n"
-)
-
-
-class BagOfWordsModel:
-    DIM = 256
-
-    def __init__(self, name):
-        self.name = name
-
-    def get_sentence_embedding_dimension(self):
-        return self.DIM
-
-    def _vector(self, text):
-        vector = np.zeros(self.DIM, dtype=np.float32)
-        for word in re.findall(r"[a-z0-9]+", text.lower()):
-            vector[zlib.crc32(word.encode()) % self.DIM] += 1.0
-        return vector
-
-    def encode(self, texts, convert_to_numpy=True, batch_size=32):
-        if isinstance(texts, str):
-            return self._vector(texts)
-        return np.stack([self._vector(t) for t in texts])
-
-
-class StubLLM:
-    """Answers from the prompt without a model; records every prompt."""
-
-    model_path = "models/stub.gguf"
-    is_loaded = True
-    prompt_budget = 3000
-
-    def __init__(self):
-        self.prompts = []
-        self.fail = False
-
-    def count_tokens(self, text):
-        return len(text.split())
-
-    def _answer(self, prompt):
-        self.prompts.append(prompt)
-        if self.fail:
-            raise RuntimeError("llama_decode returned -3")
-        return ["Gustave", " Eiffel's", " company."]
-
-    def generate(self, prompt):
-        return "".join(self._answer(prompt))
-
-    def stream(self, prompt):
-        yield from self._answer(prompt)
 
 
 @pytest.fixture
-def store_dir(tmp_path, monkeypatch):
-    path = tmp_path / "vector_db"
-    monkeypatch.setattr(embedder_module, "SentenceTransformer", BagOfWordsModel)
-    monkeypatch.setattr(
-        retriever_module, "config", dataclasses.replace(retriever_module.config, vector_store_path=str(path))
-    )
-    monkeypatch.setattr(
-        embedder_module, "config", dataclasses.replace(embedder_module.config, embedding_cache_dir="")
-    )
-    return path
+def store_dir(vector_store_dir):
+    return vector_store_dir
 
 
 @pytest.fixture
-def llm():
-    return StubLLM()
+def llm(stub_llm):
+    return stub_llm
 
 
 def make_client(llm, raise_server_exceptions=True):
@@ -107,14 +35,12 @@ def client(store_dir, llm):
         yield client
 
 
-def upload_markdown(client, content=EIFFEL, name="eiffel.md"):
-    return client.post("/documents", files={"file": (name, content.encode(), "text/markdown")})
+@pytest.fixture
+def upload_markdown(eiffel_text):
+    def upload(client, content=eiffel_text, name="eiffel.md"):
+        return client.post("/documents", files={"file": (name, content.encode(), "text/markdown")})
 
-
-def pdf_bytes(text):
-    doc = pymupdf.open()
-    doc.new_page().insert_text((72, 72), text)
-    return doc.tobytes()
+    return upload
 
 
 def events(response):
@@ -140,7 +66,7 @@ def test_asking_before_any_ingestion(client, llm):
     assert llm.prompts == []
 
 
-def test_ingest_then_ask(client, llm):
+def test_ingest_then_ask(client, llm, upload_markdown):
     ingested = upload_markdown(client)
     assert ingested.status_code == 201
     assert ingested.json()["chunks_created"] >= 1
@@ -159,9 +85,9 @@ def test_ingest_then_ask(client, llm):
     assert "1889 World's Fair" in prompt
 
 
-def test_pdf_upload_is_ingested(client):
+def test_pdf_upload_is_ingested(client, make_pdf):
     response = client.post(
-        "/documents", files={"file": ("tower.pdf", pdf_bytes("The Eiffel Tower is in Paris."), "application/pdf")}
+        "/documents", files={"file": ("tower.pdf", make_pdf("The Eiffel Tower is in Paris."), "application/pdf")}
     )
 
     assert response.status_code == 201
@@ -170,7 +96,7 @@ def test_pdf_upload_is_ingested(client):
     assert answer["sources"][0]["source"] == "tower.pdf"
 
 
-def test_reingesting_a_source_creates_no_chunk(client):
+def test_reingesting_a_source_creates_no_chunk(client, upload_markdown):
     upload_markdown(client)
 
     response = upload_markdown(client)
@@ -179,7 +105,7 @@ def test_reingesting_a_source_creates_no_chunk(client):
     assert response.json()["chunks_created"] == 0
 
 
-def test_an_unrelated_question_is_not_sent_to_the_model(client, llm):
+def test_an_unrelated_question_is_not_sent_to_the_model(client, llm, upload_markdown):
     upload_markdown(client)
 
     response = client.post("/ask", json={"question": "Quantum chromodynamics gluon confinement?"})
@@ -189,7 +115,7 @@ def test_an_unrelated_question_is_not_sent_to_the_model(client, llm):
     assert llm.prompts == []
 
 
-def test_history_reaches_the_prompt(client, llm):
+def test_history_reaches_the_prompt(client, llm, upload_markdown):
     upload_markdown(client)
     history = [
         {"role": "user", "content": "Tell me about the Eiffel Tower."},
@@ -201,7 +127,7 @@ def test_history_reaches_the_prompt(client, llm):
     assert "It stands in Paris." in llm.prompts[0]
 
 
-def test_streamed_answer(client):
+def test_streamed_answer(client, upload_markdown):
     upload_markdown(client)
 
     response = client.post("/ask/stream", json={"question": "Who built the Eiffel Tower?"})
@@ -213,11 +139,11 @@ def test_streamed_answer(client):
     assert parsed[-1] == ("done", {"answer": "Gustave Eiffel's company."})
 
 
-def test_the_index_survives_a_restart(store_dir, llm):
+def test_the_index_survives_a_restart(store_dir, llm, upload_markdown):
     with make_client(llm) as client:
         created = upload_markdown(client).json()["chunks_created"]
 
-    with make_client(StubLLM()) as restarted:
+    with make_client(type(llm)()) as restarted:
         assert restarted.get("/health").json()["indexed_chunks"] == created
         assert restarted.post("/ask", json={"question": "Who built the Eiffel Tower?"}).json()["status"] == "answered"
 
@@ -245,7 +171,7 @@ def test_a_url_to_a_private_address_is_refused_before_any_request(client):
     assert response.json()["error"] == "blocked_url"
 
 
-def test_a_model_failure_is_a_500_without_details(store_dir, llm):
+def test_a_model_failure_is_a_500_without_details(store_dir, llm, upload_markdown):
     llm.fail = True
     with make_client(llm, raise_server_exceptions=False) as client:
         upload_markdown(client)
@@ -256,7 +182,7 @@ def test_a_model_failure_is_a_500_without_details(store_dir, llm):
     assert response.json() == {"error": "generation_failed", "detail": "The model failed to generate an answer."}
 
 
-def test_a_model_failure_while_streaming_ends_with_an_error_event(store_dir, llm):
+def test_a_model_failure_while_streaming_ends_with_an_error_event(store_dir, llm, upload_markdown):
     llm.fail = True
     with make_client(llm) as client:
         upload_markdown(client)
@@ -269,7 +195,7 @@ def test_a_model_failure_while_streaming_ends_with_an_error_event(store_dir, llm
     )
 
 
-def test_a_question_that_does_not_fit_the_context_is_a_422(client, llm):
+def test_a_question_that_does_not_fit_the_context_is_a_422(client, llm, upload_markdown):
     upload_markdown(client)
     llm.prompt_budget = 5
 
