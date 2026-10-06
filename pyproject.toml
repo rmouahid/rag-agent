@@ -34,6 +34,7 @@ httpx = "^0.27"
 black = "^26.10.0"
 ruff = "^0.16.10"
 pre-commit = "^4.6.2"
+mypy = "^2.4.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,6 +56,16 @@ ignore = [
     # zip(strict=True) would change behaviour; lengths are checked where it matters
     "B905",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["rag_agent"]
+# Every function of the package is annotated, and their bodies are checked
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
 
 [build-system]
 requires = ["poetry-core"]

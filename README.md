@@ -435,7 +435,13 @@ poetry run pre-commit install
 ```
 
 They then run on every commit. CI runs the same checks, so a commit made
-with `--no-verify` is still caught. To check everything by hand:
+with `--no-verify` is still caught. CI also type-checks the package with
+[mypy](https://mypy.readthedocs.io/) (configuration in `pyproject.toml`:
+every function must be annotated):
+
+```bash
+poetry run mypy
+``` To check everything by hand:
 
 ```bash
 poetry run pre-commit run --all-files
