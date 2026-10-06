@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 
 class Retriever:
-    def __init__(self, chunk_size: int = None, overlap: int = None, chunking_strategy: str = None):
+    def __init__(self, chunk_size: int | None = None, overlap: int | None = None, chunking_strategy: str | None = None):
         self.chunker = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
         self.embedder = Embedder()
         # Recharge le store existant au démarrage (VECTOR_STORE_PATH) : les
@@ -35,8 +35,8 @@ class Retriever:
         results = self.vector_store.search(query_vector, top_k=top_k)
         return results
 
-    def save(self, path: str = None):
+    def save(self, path: str | None = None) -> None:
         self.vector_store.save(path)
 
-    def load(self, path: str = None):
+    def load(self, path: str | None = None) -> None:
         self.vector_store.load(path)

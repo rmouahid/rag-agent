@@ -1,6 +1,8 @@
+from collections.abc import Iterator
+
 from rag_agent.config import config
 from rag_agent.generation import answer as outcome
-from rag_agent.generation.answer import Answer, Source, StreamingAnswer
+from rag_agent.generation.answer import Answer, Source, Status, StreamingAnswer
 from rag_agent.generation.llm import LocalLLM
 from rag_agent.generation.truncation import fit_prompt
 from rag_agent.logging_config import get_logger
@@ -20,14 +22,16 @@ NO_DOCUMENTS = REFUSALS[outcome.NO_DOCUMENTS]
 
 
 class RAGAgent:
-    def __init__(self, llm: LocalLLM = None, history_turns: int = None, min_relevance_score: float = None):
+    def __init__(
+        self, llm: LocalLLM | None = None, history_turns: int | None = None, min_relevance_score: float | None = None
+    ):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
         self.llm = llm or LocalLLM()
         self.retriever = Retriever()
         # Échanges question/réponse récents rappelés dans le prompt
         self.history_turns = config.history_turns if history_turns is None else history_turns
-        self.history = []
+        self.history: list[dict[str, str]] = []
         # En dessous de ce score cosinus, un chunk n'est pas considéré comme
         # une source : mieux vaut ne pas répondre que répondre sans ancrage
         self.min_relevance_score = config.min_relevance_score if min_relevance_score is None else min_relevance_score
@@ -35,7 +39,7 @@ class RAGAgent:
         # Ingestion : source → chunks indexés dans le store du retriever
         self.pipeline = self.retriever.pipeline
 
-    def ingest(self, source: str, source_name: str = None) -> list[str]:
+    def ingest(self, source: str, source_name: str | None = None) -> list[str]:
         """
         Ingère une source (fichier PDF/Markdown ou URL, type détecté
         automatiquement) par le pipeline d'ingestion.
@@ -46,7 +50,7 @@ class RAGAgent:
         """
         return self.pipeline.ingest(source, source_name=source_name).chunk_ids
 
-    def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[str, str, list[Source]]:
+    def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[Status, str, list[Source]]:
         """
         Question → Retrieve → filtre de pertinence → Prompt ajusté à la
         fenêtre de contexte. Retourne (issue, prompt, sources placées dans le
@@ -65,7 +69,7 @@ class RAGAgent:
         prompt, relevant, _ = fit_prompt(question, relevant, history, self.llm.count_tokens, self.llm.prompt_budget)
         return outcome.ANSWERED, prompt, [Source.from_chunk(c) for c in relevant]
 
-    def ask(self, question: str, top_k: int = 5, history: list[dict] = None) -> Answer:
+    def ask(self, question: str, top_k: int = 5, history: list[dict] | None = None) -> Answer:
         """
         Pipeline complet RAG :
         Question → Retrieve → Prompt → LLM local → Réponse
@@ -89,7 +93,7 @@ class RAGAgent:
             self._remember(question, answer.text)
         return answer
 
-    def ask_stream(self, question: str, top_k: int = 5, history: list[dict] = None) -> StreamingAnswer:
+    def ask_stream(self, question: str, top_k: int = 5, history: list[dict] | None = None) -> StreamingAnswer:
         """
         Comme `ask`, mais le texte est produit au fil de la génération.
         En mode conversationnel, l'échange n'entre dans l'historique qu'une
@@ -99,7 +103,7 @@ class RAGAgent:
         if status != outcome.ANSWERED:
             return StreamingAnswer(tokens=iter([REFUSALS[status]]), status=status)
 
-        def tokens():
+        def tokens() -> Iterator[str]:
             logger.info("Génération de la réponse (streaming)...")
             pieces = []
             for piece in self.llm.stream(prompt):
@@ -119,7 +123,7 @@ class RAGAgent:
             return self.history
         return history[-2 * self.history_turns :] if self.history_turns > 0 else []
 
-    def _remember(self, question: str, answer: str):
+    def _remember(self, question: str, answer: str) -> None:
         """
         Ajoute l'échange à l'historique, borné aux `history_turns` derniers
         """
@@ -129,8 +133,8 @@ class RAGAgent:
         ]
         self.history = self.history[-2 * self.history_turns :] if self.history_turns > 0 else []
 
-    def save(self, path: str = None):
+    def save(self, path: str | None = None) -> None:
         self.retriever.save(path)
 
-    def load(self, path: str = None):
+    def load(self, path: str | None = None) -> None:
         self.retriever.load(path)

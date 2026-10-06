@@ -25,7 +25,7 @@ class WebLoader:
     redirection (voir url_guard) ; `allow_private_hosts` lève ce contrôle.
     """
 
-    def __init__(self, allow_private_hosts: bool = None):
+    def __init__(self, allow_private_hosts: bool | None = None):
         self.allow_private_hosts = config.allow_private_urls if allow_private_hosts is None else allow_private_hosts
 
     def _fetch(self, url: str) -> requests.Response:

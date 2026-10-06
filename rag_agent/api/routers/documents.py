@@ -107,6 +107,7 @@ def ingest_document(
         source = os.path.basename(file.filename or "")
         chunk_ids = _ingest_upload(agent, file)
     else:
+        assert url is not None  # exactement un des deux, vérifié ci-dessus
         source = url
         chunk_ids = _ingest_url(agent, url)
 

@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterator
+from typing import Any
 
 from llama_cpp import Llama
 
@@ -37,12 +38,12 @@ class LocalLLM:
 
     def __init__(
         self,
-        model_path: str = None,
-        context_size: int = None,
-        max_tokens: int = None,
-        temperature: float = None,
-        threads: int = None,
-        context_margin: int = None,
+        model_path: str | None = None,
+        context_size: int | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        threads: int | None = None,
+        context_margin: int | None = None,
     ):
         self.model_path = config.local_model_path if model_path is None else model_path
         self.context_size = context_size or config.llm_context_size
@@ -84,7 +85,7 @@ class LocalLLM:
         """
         return len(self._model.tokenize(text.encode("utf-8")))
 
-    def _complete(self, prompt: str, stream: bool = False):
+    def _complete(self, prompt: str, stream: bool = False) -> Any:
         return self._model.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=self.max_tokens,

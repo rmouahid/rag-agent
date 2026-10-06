@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 
+from rag_agent.chunking.chunk import Chunk
 from rag_agent.config import config
 from rag_agent.logging_config import get_logger
 from rag_agent.vectorstore.brute_force import cosine_top_k
@@ -18,12 +19,12 @@ INDEX_TYPES = ("brute-force", "ivf")
 class VectorStore:
     def __init__(
         self,
-        path: str = None,
-        index_type: str = None,
-        n_lists: int = None,
-        nprobe: int = None,
-        rebuild_threshold: float = None,
-        ivf_min_vectors: int = None,
+        path: str | None = None,
+        index_type: str | None = None,
+        n_lists: int | None = None,
+        nprobe: int | None = None,
+        rebuild_threshold: float | None = None,
+        ivf_min_vectors: int | None = None,
     ):
         """
         Stockage en mémoire, optionnellement persisté sur disque :
@@ -59,10 +60,10 @@ class VectorStore:
         self.nprobe = nprobe or config.nprobe
         self.rebuild_threshold = config.ivf_rebuild_threshold if rebuild_threshold is None else rebuild_threshold
         self.ivf_min_vectors = config.ivf_min_vectors if ivf_min_vectors is None else ivf_min_vectors
-        self.index = None
-        self._matrix = None
-        self.chunks = []
-        self._ids = set()
+        self.index: IVFIndex | None = None
+        self._matrix: np.ndarray | None = None
+        self.chunks: list[dict] = []
+        self._ids: set[str] = set()
 
         if path and self.exists(path):
             self.load(path)
@@ -102,7 +103,7 @@ class VectorStore:
             return False
         return not self.uses_ivf or self.index is not None
 
-    def add(self, chunks: list, embeddings: np.ndarray):
+    def add(self, chunks: list[Chunk], embeddings: np.ndarray) -> None:
         """
         Ajoute des Chunk et leurs embeddings au store (append), et
         persiste le store si un path a été fourni.
@@ -156,7 +157,7 @@ class VectorStore:
         if self.path:
             self.save()
 
-    def search(self, query_vector: np.ndarray, top_k: int = 5, nprobe: int = None) -> list[dict]:
+    def search(self, query_vector: np.ndarray, top_k: int = 5, nprobe: int | None = None) -> list[dict]:
         """
         Recherche des top_k chunks les plus proches en similarité cosine :
         - brute-force : scan exact de toute la matrice (brute_force.py)
@@ -173,7 +174,7 @@ class VectorStore:
 
         return [{**self.chunks[idx], "score": float(score)} for idx, score in zip(indices, scores)]
 
-    def save(self, path: str = None):
+    def save(self, path: str | None = None) -> None:
         """
         Sauvegarde le store sur disque (path par défaut : celui du constructeur)
         """
@@ -198,7 +199,7 @@ class VectorStore:
 
         logger.info("VectorStore sauvegardé dans %s (%d chunks)", path, len(self.chunks))
 
-    def load(self, path: str = None):
+    def load(self, path: str | None = None) -> None:
         """
         Charge le store depuis le disque (remplace le contenu courant)
         """
@@ -222,7 +223,7 @@ class VectorStore:
         if self.uses_ivf:
             self._load_index(path)
 
-    def rebuild_index(self):
+    def rebuild_index(self) -> None:
         """
         (Re)construit l'index IVF sur l'ensemble des vecteurs du store :
         nouveau k-means, nombre de listes recalculé si IVF_NLIST=0, dérive
@@ -233,7 +234,8 @@ class VectorStore:
             return
         self.index = IVFIndex.build(self._matrix, n_lists=self.n_lists or None)
 
-    def _update_index(self, new_vectors: np.ndarray, first_id: int):
+    def _update_index(self, new_vectors: np.ndarray, first_id: int) -> None:
+        assert self._matrix is not None  # appelé après l'ajout des nouveaux vecteurs
         if self.index is None:
             logger.info(
                 "%d vecteurs (seuil IVF_MIN_VECTORS = %d) : construction de l'index IVF",
@@ -251,7 +253,7 @@ class VectorStore:
             )
             self.rebuild_index()
 
-    def _load_index(self, path: str):
+    def _load_index(self, path: str) -> None:
         """
         Recharge l'index IVF persisté à côté du store ; s'il manque, est
         illisible ou ne correspond plus aux vecteurs, il est reconstruit.

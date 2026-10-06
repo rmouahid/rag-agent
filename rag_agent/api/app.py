@@ -7,7 +7,7 @@ Le RAGAgent (poids du LLM, vector store) est construit une seule fois au
 démarrage et partagé par toutes les requêtes.
 """
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -27,7 +27,7 @@ def create_app(agent_factory: Callable[[], RAGAgent] = RAGAgent) -> FastAPI:
     """
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Sans poids, ModelNotFoundError interrompt le démarrage avec la
         # commande de téléchargement, comme en CLI
         logger.info("Initialisation du RAG agent...")

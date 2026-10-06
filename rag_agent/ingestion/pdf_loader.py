@@ -18,7 +18,7 @@ class PDFLoader:
 
     def load(self, path: str) -> Document:
         doc = pymupdf.open(path)
-        pages_text = [page.get_text() for page in doc]
+        pages_text = [page.get_text() for page in doc.pages()]
         text = "".join(pages_text)
 
         logger.info("PDF chargé : %s (%d pages)", path, len(doc))

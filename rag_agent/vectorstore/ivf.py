@@ -73,7 +73,7 @@ class IVFIndex:
         return self.n_added / len(self) if len(self) else 0.0
 
     @classmethod
-    def build(cls, vectors: np.ndarray, n_lists: int = None, seed: int = 0, max_iter: int = 25) -> "IVFIndex":
+    def build(cls, vectors: np.ndarray, n_lists: int | None = None, seed: int = 0, max_iter: int = 25) -> "IVFIndex":
         """
         Construit l'index sur `vectors` (N x dim) : les ids des posting
         lists sont les numéros de ligne de cette matrice.

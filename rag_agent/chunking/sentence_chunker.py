@@ -1,4 +1,5 @@
 import re
+from collections.abc import Iterator
 
 from rag_agent.chunking.chunk import Chunk
 from rag_agent.chunking.chunker import FixedSizeChunker
@@ -21,7 +22,7 @@ class SentenceChunker:
     coupée sur une frontière de phrase).
     """
 
-    def __init__(self, chunk_size: int = None):
+    def __init__(self, chunk_size: int | None = None):
         self.chunk_size = chunk_size if chunk_size is not None else config.chunk_size
         if self.chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
@@ -34,7 +35,7 @@ class SentenceChunker:
 
         chunks: list[Chunk] = []
         buffer = ""
-        buffer_start = None
+        buffer_start = 0  # position du début de `buffer`, valable quand il est non vide
 
         for paragraph, para_start in _iter_paragraphs(text):
             for sentence, sent_offset in _iter_sentences(paragraph):
@@ -46,7 +47,7 @@ class SentenceChunker:
                 if len(sentence) > self.chunk_size:
                     if buffer:
                         chunks.append(self._make_chunk(buffer, buffer_start, document))
-                        buffer, buffer_start = "", None
+                        buffer = ""
                     chunks.extend(self._split_oversized(sentence, sentence_start, document))
                     continue
 
@@ -55,14 +56,14 @@ class SentenceChunker:
                     chunks.append(self._make_chunk(buffer, buffer_start, document))
                     buffer, buffer_start = sentence, sentence_start
                 else:
-                    buffer = candidate
-                    if buffer_start is None:
+                    if not buffer:
                         buffer_start = sentence_start
+                    buffer = candidate
 
             # Ne pas fusionner de phrases à travers une frontière de paragraphe.
             if buffer:
                 chunks.append(self._make_chunk(buffer, buffer_start, document))
-                buffer, buffer_start = "", None
+                buffer = ""
 
         if buffer:
             chunks.append(self._make_chunk(buffer, buffer_start, document))
@@ -80,7 +81,7 @@ class SentenceChunker:
         return Chunk(text=text, source=document.source, position=position, metadata=document.metadata)
 
 
-def _iter_paragraphs(text: str):
+def _iter_paragraphs(text: str) -> Iterator[tuple[str, int]]:
     cursor = 0
     for para in _PARAGRAPH_SPLIT_RE.split(text):
         if not para:
@@ -90,7 +91,7 @@ def _iter_paragraphs(text: str):
         cursor = idx + len(para)
 
 
-def _iter_sentences(paragraph: str):
+def _iter_sentences(paragraph: str) -> Iterator[tuple[str, int]]:
     cursor = 0
     for sentence in _SENTENCE_SPLIT_RE.split(paragraph):
         idx = paragraph.index(sentence, cursor) if sentence else cursor

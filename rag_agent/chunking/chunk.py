@@ -17,7 +17,7 @@ class Chunk:
     metadata: dict = field(default_factory=dict)
     id: str = field(default="")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.id:
             self.id = self._compute_id()
 

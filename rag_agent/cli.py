@@ -131,6 +131,6 @@ def main(argv: list[str] | None = None) -> int:
     return args.handler(args)
 
 
-def run():
+def run() -> None:
     """Point d'entrée du script `rag-agent` (pyproject.toml)."""
     sys.exit(main())

@@ -50,7 +50,7 @@ def format_history(history: list[dict]) -> str:
     return HISTORY_TEMPLATE.format(turns=turns)
 
 
-def build_prompt(question: str, chunks: list[dict], history: list[dict] = None) -> str:
+def build_prompt(question: str, chunks: list[dict], history: list[dict] | None = None) -> str:
     """
     Assemble le prompt final : consignes, historique récent éventuel,
     contexte récupéré et question

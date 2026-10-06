@@ -1,12 +1,14 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from typing import Final, Literal
 
 EXCERPT_LENGTH = 200
 
 # Issue d'une question : répondue, ou refusée faute de matière
-ANSWERED = "answered"
-NO_DOCUMENTS = "no_documents"
-NO_RELEVANT_CONTEXT = "no_relevant_context"
+Status = Literal["answered", "no_documents", "no_relevant_context"]
+ANSWERED: Final = "answered"
+NO_DOCUMENTS: Final = "no_documents"
+NO_RELEVANT_CONTEXT: Final = "no_relevant_context"
 
 
 def _excerpt(text: str, length: int = EXCERPT_LENGTH) -> str:
@@ -50,7 +52,7 @@ class Answer:
 
     text: str
     sources: list[Source] = field(default_factory=list)
-    status: str = ANSWERED
+    status: Status = ANSWERED
 
     def __str__(self) -> str:
         return self.text
@@ -72,7 +74,7 @@ class StreamingAnswer:
 
     tokens: Iterator[str]
     sources: list[Source] = field(default_factory=list)
-    status: str = ANSWERED
+    status: Status = ANSWERED
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.tokens)
