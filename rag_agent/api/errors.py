@@ -84,7 +84,10 @@ async def _unexpected_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 def install_error_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(APIError, _api_error)
-    app.add_exception_handler(StarletteHTTPException, _http_error)
-    app.add_exception_handler(RequestValidationError, _validation_error)
+    # Starlette type tout handler comme prenant une `Exception`, alors qu'il
+    # n'appelle chacun qu'avec la classe sous laquelle il est enregistré :
+    # un handler qui annonce sa sous-classe est correct, mais refusé par mypy
+    app.add_exception_handler(APIError, _api_error)  # type: ignore[arg-type]
+    app.add_exception_handler(StarletteHTTPException, _http_error)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _unexpected_error)

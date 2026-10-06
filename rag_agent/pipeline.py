@@ -10,12 +10,16 @@ ingèrent toutes deux par lui.
 
 from dataclasses import dataclass, field
 
+from rag_agent.chunking.chunker import FixedSizeChunker
 from rag_agent.chunking.dedup import deduplicate_chunks
+from rag_agent.chunking.sentence_chunker import SentenceChunker
 from rag_agent.ingestion.document import Document
 from rag_agent.ingestion.md_loader import MarkdownLoader
 from rag_agent.ingestion.pdf_loader import PDFLoader
 from rag_agent.ingestion.web_loader import WebLoader
 from rag_agent.logging_config import get_logger
+from rag_agent.vectorstore.embedder import Embedder
+from rag_agent.vectorstore.vector_store import VectorStore
 
 logger = get_logger(__name__)
 
@@ -62,7 +66,13 @@ class IngestionResult:
 
 
 class IngestionPipeline:
-    def __init__(self, chunker, embedder, vector_store, loaders: dict | None = None):
+    def __init__(
+        self,
+        chunker: FixedSizeChunker | SentenceChunker,
+        embedder: Embedder,
+        vector_store: VectorStore,
+        loaders: dict[str, PDFLoader | MarkdownLoader | WebLoader] | None = None,
+    ):
         self.chunker = chunker
         self.embedder = embedder
         self.vector_store = vector_store

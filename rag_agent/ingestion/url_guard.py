@@ -41,7 +41,7 @@ def check_url(url: str) -> None:
         raise ConnectionError(f"Impossible de résoudre {parts.hostname} : {e}") from e
 
     for *_, sockaddr in infos:
-        if not _is_public(sockaddr[0]):
+        if not _is_public(str(sockaddr[0])):
             raise BlockedURLError(
                 f"Refusing {url!r}: {parts.hostname} resolves to the non-public address {sockaddr[0]} "
                 "(set ALLOW_PRIVATE_URLS=true to ingest pages from your own network)"

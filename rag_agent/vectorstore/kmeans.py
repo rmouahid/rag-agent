@@ -84,7 +84,7 @@ def kmeans(
     init: str = "k-means++",
     max_iter: int = 100,
     tol: float = 1e-4,
-    seed: int = None,
+    seed: int | None = None,
 ) -> KMeansResult:
     """
     k-means de Lloyd, implémenté avec numpy uniquement (quantificateur

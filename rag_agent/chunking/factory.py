@@ -3,7 +3,9 @@ from rag_agent.chunking.sentence_chunker import SentenceChunker
 from rag_agent.config import config
 
 
-def get_chunker(strategy: str = None, chunk_size: int = None, overlap: int = None):
+def get_chunker(
+    strategy: str | None = None, chunk_size: int | None = None, overlap: int | None = None
+) -> FixedSizeChunker | SentenceChunker:
     """
     Instancie le chunker correspondant à la stratégie demandée
     (par défaut : CHUNKING_STRATEGY via la config, #4).

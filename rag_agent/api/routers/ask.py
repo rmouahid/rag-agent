@@ -107,7 +107,7 @@ def answer_events(agent: RAGAgent, question: str, top_k: int, history: list[dict
             {"status": answer.status, "sources": [SourceOut(**vars(s)).model_dump() for s in answer.sources]},
         )
 
-        pieces = []
+        pieces: list[str] = []
         try:
             for piece in answer:
                 if not pieces:

@@ -10,7 +10,7 @@ _SHINGLE_SIZE = 5
 
 def deduplicate_chunks(
     chunks: list[Chunk],
-    existing_texts: list[str] = None,
+    existing_texts: list[str] | None = None,
     similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
 ) -> list[Chunk]:
     """
