@@ -49,5 +49,8 @@ jobs:
       - name: Check formatting
         run: poetry run black --check .
 
+      - name: Type check
+        run: poetry run mypy
+
       - name: Run tests
         run: poetry run pytest -q
