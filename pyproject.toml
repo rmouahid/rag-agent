@@ -1,26 +1,32 @@
-[tool.poetry]
+[project]
 name = "rag-agent"
 version = "0.1.0"
 description = "A minimal but precise Retrieval-Augmented Generation (RAG) agent built from scratch in Python"
-authors = ["rmouahid"]
+authors = [{ name = "rmouahid" }]
 readme = "README.md"
-packages = [{ include = "rag_agent" }]
+license = "MIT"
+requires-python = ">=3.11,<4.0"
+# Dependencies stay in [tool.poetry.dependencies]: torch comes from the
+# PyTorch CPU index, which only Poetry's source configuration can express
+dynamic = ["dependencies"]
 
-[tool.poetry.scripts]
+[project.scripts]
 rag-agent = "rag_agent.cli:run"
 
+[tool.poetry]
+packages = [{ include = "rag_agent" }]
+
 [tool.poetry.dependencies]
-python = "^3.11"
-numpy = "^1.26"
-torch = { version = "^2.4", source = "pytorch-cpu" }
-sentence-transformers = "^3.0"
-fastapi = "^0.115"
-uvicorn = "^0.32"
-pymupdf = "^1.24"
-requests = "^2.32"
-beautifulsoup4 = "^4.12"
-python-dotenv = "^1.0"
-llama-cpp-python = "^0.3"
+numpy = "^1.26.4"
+torch = { version = "^2.14", source = "pytorch-cpu" }
+sentence-transformers = "^3.4.1"
+fastapi = "^0.115.14"
+uvicorn = "^0.32.1"
+pymupdf = "^1.28.2"
+requests = "^2.34.2"
+beautifulsoup4 = "^4.15.0"
+python-dotenv = "^1.2.3"
+llama-cpp-python = "^0.3.35"
 python-multipart = "^0.0.20"
 
 [[tool.poetry.source]]
@@ -29,8 +35,8 @@ url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.3"
-httpx = "^0.27"
+pytest = "^8.4.2"
+httpx = "^0.27.2"
 black = "^26.10.0"
 ruff = "^0.16.10"
 pre-commit = "^4.6.2"
