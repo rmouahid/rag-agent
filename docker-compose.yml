@@ -1,0 +1,21 @@
+# docker compose up -d   →   http://127.0.0.1:8000/docs
+#
+# Put the GGUF weights in ./models first (see the README, "Local LLM").
+services:
+  rag-agent:
+    build: .
+    image: rag-agent
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./models:/app/models:ro
+      - index:/app/vector_db
+      - cache:/app/.cache
+    restart: unless-stopped
+
+volumes:
+  index:
+  cache:
