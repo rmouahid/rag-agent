@@ -27,9 +27,11 @@ ENV POETRY_VERSION=2.5.1 \
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
 WORKDIR /app
-COPY pyproject.toml poetry.lock README.md ./
-# Dependencies first, in their own layer: code changes do not recompile them
-RUN poetry install --only main --no-root
+COPY pyproject.toml poetry.lock ./
+# Dependencies first, in their own layer: code and README changes do not
+# recompile llama.cpp. Poetry only needs the declared README to exist here
+RUN touch README.md && poetry install --only main --no-root
+COPY README.md ./
 COPY rag_agent ./rag_agent
 RUN poetry install --only main
 
