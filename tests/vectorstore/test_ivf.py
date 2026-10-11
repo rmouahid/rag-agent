@@ -157,7 +157,7 @@ def test_brute_force_store_has_no_index():
 
 def test_vector_store_rejects_an_unknown_index_type():
     with pytest.raises(ValueError, match="index_type"):
-        VectorStore(index_type="hnsw")
+        VectorStore(index_type="annoy")
 
 
 # --- search -------------------------------------------------------------------------
@@ -359,7 +359,7 @@ def test_a_small_ivf_store_searches_exactly_without_building_an_index(monkeypatc
     store = VectorStore(index_type="ivf", ivf_min_vectors=50)
     store.add(make_chunks(40), vectors)
 
-    assert not store.uses_ivf
+    assert not store.uses_index
     assert store.index is None
     assert store.is_ready
     expected, _ = cosine_top_k(vectors, vectors[0], 5)
@@ -372,7 +372,7 @@ def test_the_index_is_built_once_the_store_reaches_ivf_min_vectors():
     store.add(make_chunks(40), vectors[:40])
     store.add(make_chunks(20, prefix="d"), vectors[40:])
 
-    assert store.uses_ivf
+    assert store.uses_index
     assert store.index.covers(60)
 
 
