@@ -249,6 +249,72 @@ This project is under active development. The full plan — local LLM migration,
 poetry install
 ```
 
+### Usage examples
+
+A complete session, from an empty index to an answer. The examples ingest
+`tests/fixtures/knowledge.md`, a short file on five unrelated topics shipped
+with the repository; any PDF, Markdown file or web page works the same way.
+
+**1. Download the model** (once, ~2 GB; see [Local LLM](#local-llm)):
+
+```bash
+poetry run hf download bartowski/Llama-3.2-3B-Instruct-GGUF \
+    Llama-3.2-3B-Instruct-Q4_K_M.gguf --local-dir models
+```
+
+**2. From the command line**, ingest then ask:
+
+```console
+$ poetry run rag-agent ingest tests/fixtures/
+tests/fixtures/knowledge.md: 4 chunks indexed (0 duplicates skipped)
+4 chunks in vector_db
+
+$ poetry run rag-agent ingest tests/fixtures/      # again: nothing new
+tests/fixtures/knowledge.md: 0 chunks indexed (4 duplicates skipped)
+4 chunks in vector_db
+
+$ poetry run rag-agent ask "Who designed and built the Eiffel Tower?"
+```
+
+`ask` streams the answer as it is generated, then prints the numbered
+sources it was built from.
+
+**3. Over HTTP**, start the API (`poetry run uvicorn rag_agent.api.app:app
+--port 8000`), then ingest a file or a web page:
+
+```bash
+# curl
+curl -s -F file=@tests/fixtures/knowledge.md http://127.0.0.1:8000/documents
+curl -s -F url=https://en.wikipedia.org/wiki/Eiffel_Tower http://127.0.0.1:8000/documents
+
+# HTTPie
+http -f POST :8000/documents file@tests/fixtures/knowledge.md
+http -f POST :8000/documents url=https://en.wikipedia.org/wiki/Eiffel_Tower
+```
+
+```json
+{"source": "knowledge.md", "chunks_created": 4, "chunk_ids": ["19776342f708f63f", "d7521b2f5f8fabb5", "bcc23b08db6eda1a", "fae56c140385d0d0"]}
+```
+
+Ask a question, as a single answer or as a stream:
+
+```bash
+# curl
+curl -s http://127.0.0.1:8000/ask -H 'content-type: application/json' \
+    -d '{"question": "How do worker bees tell their sisters where flowers are?", "top_k": 3}'
+curl -N "http://127.0.0.1:8000/ask/stream?question=Who+created+Python%3F"
+
+# HTTPie
+http POST :8000/ask question="How do worker bees tell their sisters where flowers are?" top_k:=3
+http --stream POST :8000/ask/stream question="Who created Python?"
+```
+
+The answer comes with the passages it used (`sources`) and a `status`;
+the response formats, follow-up questions with `history` and every error
+code are described in [Run the API](#run-the-api) below, and the
+interactive documentation at `http://127.0.0.1:8000/docs` lets you try each
+route from the browser.
+
 ### Command line
 
 `poetry install` also installs a `rag-agent` command, for local use and quick
