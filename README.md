@@ -200,6 +200,17 @@ forces a rebuild at any time.
 
 ### Benchmark: brute-force vs. IVF
 
+**In plain words.** Finding the passages closest to a question is like
+looking for a book in a library. Brute-force reads the spine of every book:
+it never misses, but it takes longer as the library grows. IVF first sorts
+the books onto shelves by topic (the k-means lists); for a question it walks
+only to the few shelves whose topic is closest (`NPROBE` of them) and reads
+those. It is much faster, but a relevant book shelved under a neighbouring
+topic can be missed. *Recall@10* measures exactly that: out of the 10
+passages brute-force would return, how many IVF also finds. Probing more
+shelves brings recall back up, at the cost of speed. The table below shows
+where that trade-off lands on a real corpus.
+
 Measured on **31,800 real chunks**: 40 public-domain books from Project
 Gutenberg, split with the project's fixed-size chunker (500 characters)
 and embedded with `all-MiniLM-L6-v2` (384 dimensions). The machine has a
