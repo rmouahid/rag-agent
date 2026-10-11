@@ -456,6 +456,12 @@ poetry run mypy
 poetry run pre-commit run --all-files
 ```
 
+## Contributing
+
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+branch and commit conventions and the checks to run before opening a pull
+request.
+
 ## License
 
 [MIT](LICENSE)
