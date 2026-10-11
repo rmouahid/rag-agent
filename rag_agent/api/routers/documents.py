@@ -28,12 +28,22 @@ def _ingestion_failed(source: str) -> APIError:
     return APIError(status.HTTP_500_INTERNAL_SERVER_ERROR, "ingestion_failed", f"Could not ingest {source!r}.")
 
 
+def _safe_name(filename: str | None) -> str:
+    """
+    Nom de fichier fourni par le client, réduit à son dernier composant :
+    il n'est jamais utilisé comme chemin (le fichier est écrit dans un
+    temporaire), mais il est affiché et enregistré comme source. Les deux
+    séparateurs sont traités, `\\` n'en étant pas un sous Linux
+    """
+    return os.path.basename((filename or "").replace("\\", "/"))
+
+
 def _ingest_upload(agent: RAGAgent, file: UploadFile) -> list[str]:
     """
     Les loaders lisent un chemin : le fichier reçu est copié dans un
     fichier temporaire de même extension, puis supprimé
     """
-    name = os.path.basename(file.filename or "")
+    name = _safe_name(file.filename)
     try:
         source_type(name)
     except UnsupportedSourceError as e:
@@ -104,7 +114,7 @@ def ingest_document(
         )
 
     if file is not None:
-        source = os.path.basename(file.filename or "")
+        source = _safe_name(file.filename)
         chunk_ids = _ingest_upload(agent, file)
     else:
         assert url is not None  # exactement un des deux, vérifié ci-dessus

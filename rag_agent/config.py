@@ -27,6 +27,7 @@ class Config:
     ivf_n_lists: int = int(os.getenv("IVF_NLIST", "0"))
     ivf_min_vectors: int = int(os.getenv("IVF_MIN_VECTORS", "10000"))
     ivf_rebuild_threshold: float = float(os.getenv("IVF_REBUILD_THRESHOLD", "0.2"))
+    max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "20"))
     allow_private_urls: bool = os.getenv("ALLOW_PRIVATE_URLS", "false").lower() in ("1", "true", "yes")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

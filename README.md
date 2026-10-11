@@ -367,6 +367,14 @@ resolves to a loopback, private, link-local or reserved address (localhost,
 every redirect is checked the same way. Set `ALLOW_PRIVATE_URLS=true` to
 ingest pages from your own network.
 
+Request bodies are capped at `MAX_UPLOAD_MB` (default 20 MB): a larger
+upload is refused with `413` as soon as its `Content-Length` announces it,
+and bodies sent without one (chunked) are counted as they arrive, so an
+oversized file is never written to disk. The uploaded file name is only
+kept as the source label: it is reduced to its last component (`/` and
+`\` both count as separators) and never used as a path; the file itself
+goes to a temporary file that is deleted after ingestion.
+
 #### Errors
 
 Every error response has the same shape, with a stable `error` code and a
@@ -381,6 +389,7 @@ server logs:
 |---|---|---|
 | 400 | `blocked_url` | The URL resolves to a non-public address |
 | 404 / 405 | `not_found` / `method_not_allowed` | Unknown route or method |
+| 413 | `payload_too_large` | Request body over `MAX_UPLOAD_MB` (default 20) |
 | 415 | `unsupported_source` | Unsupported file type, non-http(s) URL or non-HTML page |
 | 422 | `validation_error` | Malformed body; `detail` lists `{field, message, type}` per rejected field |
 | 422 | `invalid_source` | Both or neither of `file` and `url` |

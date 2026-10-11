@@ -51,6 +51,10 @@ def _code_for(status_code: int) -> str:
     """
     404 → "not_found", 405 → "method_not_allowed"...
     """
+    if status_code == 413:
+        # Le libellé HTTP varie selon la version de Python ("Request Entity
+        # Too Large", puis "Content Too Large") : code fixé
+        return "payload_too_large"
     try:
         return HTTPStatus(status_code).phrase.lower().replace(" ", "_").replace("-", "_")
     except ValueError:
