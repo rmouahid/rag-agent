@@ -8,7 +8,7 @@ A minimal but precise Retrieval-Augmented Generation (RAG) agent built from scra
 
 - Multi-source ingestion (PDF, Markdown, Web)
 - Custom chunking & embedding pipeline, built without a framework
-- Vector search built from scratch with numpy: exact brute-force cosine search, and an IVF index (own k-means, configurable `nprobe`, incremental updates)
+- Vector search built from scratch with numpy: exact brute-force cosine search, an IVF index (own k-means, configurable `nprobe`, incremental updates) and an HNSW graph (multi-layer proximity graph, configurable `ef`, incremental insertion)
 - Answer generation via a locally-hosted LLM — no external inference API
 
 ## Stack
@@ -152,12 +152,13 @@ CLI uses it, so answers appear word by word.
 
 ## Vector search
 
-Two search backends, selected with `INDEX_TYPE` (see `.env.example`):
+Three search backends, selected with `INDEX_TYPE` (see `.env.example`):
 
 | `INDEX_TYPE` | How it works | When to use it |
 |---|---|---|
 | `brute-force` (default) | Exact cosine similarity against every stored vector. | Small corpora, and as the correctness baseline. |
 | `ivf` | Inverted file index: a k-means (implemented from scratch) splits the vectors into `IVF_NLIST` lists; a query only scans the `NPROBE` lists whose centroids are closest to it. | Larger corpora, where scanning every vector gets slow. |
+| `hnsw` | Hierarchical Navigable Small World graph (implemented from scratch): each vector is linked to its nearest neighbours on several layers; a query descends the sparse upper layers, then explores the bottom layer `HNSW_EF_SEARCH` candidates wide. | Larger corpora that keep growing: the graph absorbs new vectors without the drift and rebuilds of IVF. |
 
 The index is persisted next to the store (`ivf_index.npz`) and reloaded on
 startup; a missing or out-of-sync index is rebuilt automatically.
@@ -170,11 +171,58 @@ exact scan takes a few milliseconds (2 ms at 5,000 vectors in the
 ingestion that reaches the threshold, and the store switches to it from
 then on. Set `IVF_MIN_VECTORS=0` to use the index at any size.
 
+`IVF_MIN_VECTORS` applies to both approximate indexes: below it, `hnsw`
+also searches by brute force.
+
 - **`IVF_NLIST`**: number of lists. `0` (default) picks about `sqrt(N)`.
 - **`NPROBE`**: lists scanned per query, which trades speed for recall. Higher
   values give better recall but slower queries, and `NPROBE = IVF_NLIST` returns
   exactly the brute-force results. It can also be overridden per query with
   `VectorStore.search(..., nprobe=...)`.
+
+### HNSW
+
+The graph follows Malkov & Yashunin (2016), in numpy and plain Python:
+each vector gets a random level (geometric law, so upper layers hold few
+nodes), and is linked on every layer up to its level to at most
+`HNSW_M` neighbours (`2 × HNSW_M` on the bottom layer). Neighbours are
+chosen with the paper's diversity heuristic: a candidate is kept only if
+it is closer to the new vector than to the neighbours already kept, which
+keeps the graph navigable between nearby clusters.
+
+- **`HNSW_M`** (default `16`): links per node. More links, better recall,
+  more memory and slower inserts.
+- **`HNSW_EF_CONSTRUCTION`** (default `100`): search width when inserting;
+  it sets the quality of the graph.
+- **`HNSW_EF_SEARCH`** (default `64`): search width per query, the
+  recall/latency knob (like `NPROBE` for IVF). It can be overridden per
+  query with `VectorStore.search(..., ef_search=...)`.
+
+New vectors are inserted into the existing graph, so unlike IVF there is no
+drift and no periodic rebuild. The graph is persisted as `hnsw_index.npz`
+(the vectors themselves are not duplicated) and reloaded on startup.
+
+Recall@10 against brute force, on 5,000 synthetic 384-dimensional vectors
+(50 topics plus Gaussian noise), compared with the reference C++ library
+[hnswlib](https://github.com/nmslib/hnswlib) built with the same `M` and
+`ef_construction`:
+
+| Data | `ef_search` | This project | hnswlib |
+|---|---:|---:|---:|
+| tight clusters (noise 0.1) | 16 | 0.969 | 0.957 |
+| | 64 | 1.000 | 0.999 |
+| near-random (noise 0.25) | 16 | 0.257 | 0.280 |
+| | 64 | 0.591 | 0.620 |
+| | 128 | 0.818 | 0.814 |
+| | 256 | 0.941 | 0.941 |
+
+Recall matches the reference implementation; the low values on the second
+dataset come from the data, not the code: near-random vectors in high
+dimension have no neighbourhood structure for any approximate index to
+exploit, which real sentence embeddings do have. On the first dataset a
+query takes about 0.3 ms at `ef_search=32` (recall 1.000) against 21 ms for
+brute force, single CPU core. Building the graph is the cost: about 14 s
+for 5,000 vectors in pure Python.
 
 ### Incremental updates vs. rebuilds
 
@@ -595,7 +643,8 @@ agent for a fake, and `test_integration.py` runs the real `RAGAgent`
 these fixtures, from upload to streamed answer, error paths included.
 
 `tests/test_end_to_end.py` checks answer quality end to end, once per
-search backend (brute force, and IVF with 2 of 4 lists probed): it ingests
+search backend (brute force, IVF with 2 of 4 lists probed, and HNSW with a
+sparse graph and a narrow search): it ingests
 `tests/fixtures/knowledge.md` (five unrelated topics) and asks questions
 whose answers are written in it. An extractive stand-in model answers
 with the context sentence closest to the question, so the expected fact

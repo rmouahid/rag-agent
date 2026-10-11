@@ -28,6 +28,8 @@ BACKENDS = {
     # Four lists for about a dozen chunks and only two probed per query: the
     # index has to route each question to the right lists
     "ivf": {"index_type": "ivf", "ivf_min_vectors": 0, "ivf_n_lists": 4, "nprobe": 2},
+    # Small graph and narrow search: the answer must be reached through the links
+    "hnsw": {"index_type": "hnsw", "ivf_min_vectors": 0, "hnsw_m": 2, "hnsw_ef_construction": 4, "hnsw_ef_search": 2},
 }
 
 # (question, fact the answer must contain, word of the passage it comes from)
@@ -106,7 +108,9 @@ def test_the_document_is_indexed_with_the_selected_backend(agent):
     assert len(store) >= 8
     assert {c["source"] for c in store.chunks} == {str(KNOWLEDGE)}
     if store.index_type == "ivf":
-        assert store.uses_ivf and store.index.n_lists == 4
+        assert store.uses_index and store.index.n_lists == 4
+    elif store.index_type == "hnsw":
+        assert store.uses_index and store.index.m == 2 and store.index.covers(len(store))
     else:
         assert store.index is None
 
@@ -121,7 +125,7 @@ def test_answers_come_from_the_relevant_passage(agent, question, fact, topic):
     assert best.source == str(KNOWLEDGE)
     assert fact in chunk_text(agent, best.chunk_id)
     assert topic.lower() in chunk_text(agent, best.chunk_id).lower()
-    assert agent.index_queries == (1 if agent.retriever.vector_store.index_type == "ivf" else 0)
+    assert agent.index_queries == (0 if agent.retriever.vector_store.index_type == "brute-force" else 1)
 
 
 def test_the_streamed_answer_matches_the_answer(agent):
