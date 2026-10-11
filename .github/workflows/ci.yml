@@ -54,3 +54,21 @@ jobs:
 
       - name: Run tests
         run: poetry run pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Builds the API image so the Dockerfile cannot rot; layers are cached
+      # because compiling llama-cpp-python takes several minutes
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: rag-agent:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -534,6 +534,43 @@ Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests
 swap them with `app.dependency_overrides` or `create_app(agent_factory=...)`.
 
+## Docker
+
+The `Dockerfile` builds the API image (llama.cpp compiled for any x86-64 CPU,
+non-root user). Model weights, the vector store and the caches are mounted
+as volumes, never copied into the image, so the image stays the same when
+you change model and the index survives upgrades:
+
+```bash
+# put the GGUF weights in ./models first (see Local LLM)
+docker compose up -d                     # build, then serve on 127.0.0.1:8000
+docker compose logs -f                   # model loading, requests
+```
+
+| Path in the container | Content | Mounted from |
+|---|---|---|
+| `/app/models` | GGUF weights (read-only) | `./models` |
+| `/app/vector_db` | vectors, chunks, IVF index | volume `index` |
+| `/app/.cache` | embedding model download and computed embeddings | volume `cache` |
+
+Settings come from `.env` (optional, see `.env.example`), as outside
+Docker. The container's healthcheck calls `/health`, so `docker ps` shows
+`healthy` once the model and the store are loaded (allow up to two minutes
+on the first start, which also downloads the embedding model):
+
+```bash
+docker inspect -f '{{.State.Health.Status}}' rag-agent-rag-agent-1
+```
+
+Without Compose:
+
+```bash
+docker build -t rag-agent .
+docker run -d -p 127.0.0.1:8000:8000 \
+    -v "$PWD/models:/app/models:ro" -v rag-agent-index:/app/vector_db -v rag-agent-cache:/app/.cache \
+    rag-agent
+```
+
 ## Tests
 
 ```bash
