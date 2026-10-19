@@ -1,0 +1,15 @@
+{
+  "name": "lumen-rail",
+  "version": "1.0.0",
+  "created": "2026-10-19",
+  "description": "Documentation of Lumen Rail, a fictional regional rail operator. The facts are invented so that a model cannot answer from what it learned in training: an answer that is not grounded in the retrieved context shows up as a hallucination.",
+  "corpus": [
+    "company_overview.md",
+    "lines_and_timetable.md",
+    "lumen_miles.md",
+    "rolling_stock.md",
+    "tickets_and_refunds.md",
+    "travel_rules_and_accessibility.md"
+  ],
+  "questions": "questions.jsonl"
+}
