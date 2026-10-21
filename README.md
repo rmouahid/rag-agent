@@ -342,6 +342,47 @@ To reproduce them on a persisted store:
 python benchmarks/ann_benchmark.py --store bench_store --sizes 32000 --name ann
 ```
 
+### Benchmark at scale: when does brute-force stop being viable?
+
+The same benchmark at 10k, 25k, 50k and 100k chunks of the 120,000-chunk
+Gutenberg store. For each size, the fastest setting that keeps
+recall@10 ≥ 0.9 (PQ never reaches it, see above):
+
+| N | Brute-force p50 | IVF ≥ 0.9 | HNSW ≥ 0.9 | IVF build | HNSW build | Memory (vectors) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10,000 | 9.4 ms | 0.76 ms (nprobe=16) | 0.43 ms (ef=32) | 1.2 s | 32 s | 14.6 MB |
+| 25,000 | 73 ms | 1.51 ms (nprobe=16) | 0.48 ms (ef=32) | 3.9 s | 84 s | 36.6 MB |
+| 50,000 | 298 ms | 11.7 ms (nprobe=64) | 0.92 ms (ef=64) | 13 s | 177 s | 73.2 MB |
+| 100,000 | 418 ms | 21.3 ms (nprobe=64) | 0.97 ms (ef=64) | 28 s | 360 s | 146.5 MB |
+
+![Recall/latency trade-off at 10k to 100k vectors](docs/benchmarks/scale_recall_latency.png)
+
+- **Up to about 10,000 chunks, brute-force is enough.** A 9 ms exact scan
+  is below the cost of embedding the question itself, and needs no index
+  to build or keep in sync.
+- **From about 25,000 chunks, an index pays off.** The scan reaches 73 ms
+  and then grows faster than the corpus: 300 to 420 ms at 50k to 100k.
+  `cosine_top_k` computes in float64 for exactness, so each query copies
+  the whole matrix (290 MB at 100k vectors), which on a 2 GB machine ends
+  in swapping. An index scans only a small part of the vectors and avoids
+  that copy.
+- **HNSW stays under 1 ms at every size**, but its build grows from 30 s to
+  6 minutes on one core, and it needs a larger `ef` to hold the same recall
+  as N grows. **IVF builds 13x faster** at 100k vectors but needs
+  `nprobe=64` above 50k chunks to keep 0.9 recall, at about 20 ms.
+- **Memory stays dominated by the vectors** (about 1.5 KB per chunk). The
+  HNSW graph adds 14%. Past a few hundred thousand chunks on this machine,
+  the vectors themselves no longer fit, and only PQ's codes do (5 MB
+  instead of 147 MB at 100k), at the recall cost measured above.
+
+Full tables, for every setting and size, are in
+[`docs/benchmarks/scale.md`](docs/benchmarks/scale.md). The run took 30
+minutes with a peak RSS of 1.25 GB:
+
+```bash
+python benchmarks/ann_benchmark.py --store big_store --sizes 10000 25000 50000 100000 --pq-m 48 --name scale
+```
+
 ## Roadmap
 
 This project is under active development. The full plan — local LLM migration, IVF/HNSW/PQ vector search, a FastAPI service, an answer-quality evaluation harness, and an agentic retrieval loop — is tracked as [GitHub milestones and issues](../../issues).
