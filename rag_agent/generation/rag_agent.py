@@ -23,12 +23,17 @@ NO_DOCUMENTS = REFUSALS[outcome.NO_DOCUMENTS]
 
 class RAGAgent:
     def __init__(
-        self, llm: LocalLLM | None = None, history_turns: int | None = None, min_relevance_score: float | None = None
+        self,
+        llm: LocalLLM | None = None,
+        history_turns: int | None = None,
+        min_relevance_score: float | None = None,
+        retriever: Retriever | None = None,
     ):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
         self.llm = llm or LocalLLM()
-        self.retriever = Retriever()
+        # Par défaut, le store persistant de VECTOR_STORE_PATH
+        self.retriever = retriever or Retriever()
         # Échanges question/réponse récents rappelés dans le prompt
         self.history_turns = config.history_turns if history_turns is None else history_turns
         self.history: list[dict[str, str]] = []
