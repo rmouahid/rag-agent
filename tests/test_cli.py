@@ -212,3 +212,14 @@ def test_eval_rerank_loads_the_cross_encoder(eval_llm, monkeypatch, tmp_path):
     assert cli.main(["eval", "--rerank", "--output-dir", str(tmp_path)]) == 0
     (run_dir,) = tmp_path.iterdir()
     assert json.loads((run_dir / "report.json").read_text())["meta"]["agent"]["reranking"] is True
+
+
+def test_eval_agentic_reports_the_searches_per_question(eval_llm, tmp_path):
+    assert cli.main(["eval", "--agentic", "--output-dir", str(tmp_path)]) == 0
+
+    (run_dir,) = tmp_path.iterdir()
+    report = json.loads((run_dir / "report.json").read_text())
+    assert report["meta"]["agent"]["agentic_loop"] is True
+    assert report["summary"]["searches_per_question"] == 1.0  # the stub's reply is no decision: one search
+    assert all(r["searches"] for r in report["results"])
+    assert "Searches per question | 1.00" in (run_dir / "report.md").read_text()
