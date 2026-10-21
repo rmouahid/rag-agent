@@ -241,18 +241,38 @@ class PQIndex:
         return candidates[best], scores[best]
 
     def save(self, path: str) -> None:
-        """Persiste codebooks, codes et IVF éventuel (numpy pur, écriture atomique)"""
+        """
+        Persiste codebooks, codes et IVF éventuel dans `path`/pq_index.npz
+        (numpy pur, écriture atomique). L'IVF est rangé dans ce même fichier,
+        pas dans ivf_index.npz : un index IVF seul peut occuper le dossier.
+        """
         os.makedirs(path, exist_ok=True)
+        arrays = {"codebooks": self.pq.codebooks, "codes": self.codes}
+        if self.ivf is not None:
+            arrays.update(
+                ivf_centroids=self.ivf.centroids,
+                ivf_ids=np.concatenate(self.ivf.lists),
+                ivf_sizes=np.array([len(ids) for ids in self.ivf.lists], dtype=np.int64),
+                ivf_n_added=np.array(self.ivf.n_added, dtype=np.int64),
+            )
         index_path = os.path.join(path, INDEX_FILE)
         with open(f"{index_path}.tmp", "wb") as f:
-            np.savez(f, codebooks=self.pq.codebooks, codes=self.codes)
+            np.savez(f, **arrays)
         os.replace(f"{index_path}.tmp", index_path)
-        if self.ivf is not None:
-            self.ivf.save(path)
 
     @classmethod
     def load(cls, path: str) -> "PQIndex":
         with np.load(os.path.join(path, INDEX_FILE), allow_pickle=False) as data:
             codebooks, codes = data["codebooks"], data["codes"]
-        ivf = IVFIndex.load(path) if IVFIndex.exists(path) else None
+            ivf = None
+            if "ivf_centroids" in data.files:
+                ids, sizes = data["ivf_ids"], data["ivf_sizes"]
+                if sizes.sum() != len(ids):
+                    raise ValueError(f"Corrupt PQ index at {path}: IVF list sizes do not add up to the stored ids")
+                lists = np.split(ids, np.cumsum(sizes)[:-1])
+                ivf = IVFIndex(data["ivf_centroids"], lists, n_added=int(data["ivf_n_added"]))
         return cls(ProductQuantizer(codebooks), codes, ivf)
+
+    @staticmethod
+    def exists(path: str) -> bool:
+        return os.path.isfile(os.path.join(path, INDEX_FILE))
