@@ -274,3 +274,30 @@ def test_the_loop_is_off_by_default():
 def test_max_iterations_must_be_positive():
     with pytest.raises(ValueError, match="max_iterations"):
         RAGAgent(llm=ScriptedLLM(), retriever=QueryRetriever({}), agentic=True, max_iterations=0)
+
+
+def test_the_judge_prompt_is_shrunk_to_the_model_budget():
+    llm = ScriptedLLM()
+    llm.prompt_budget = 150
+    chunks = [{"id": str(i), "source": f"{i}.md", "text": "word " * 30, "score": 0.9} for i in range(5)]
+
+    SufficiencyJudge(llm).decide("question", chunks, ["question"])
+
+    prompt = llm.judge_prompts[0]
+    assert llm.count_tokens(prompt) <= 150
+    assert "[Source: 0.md]" in prompt and "[Source: 4.md]" not in prompt
+
+
+def test_a_failing_judge_stops_the_loop_without_failing_the_answer():
+    class FailingJudgeLLM(ScriptedLLM):
+        def generate(self, prompt):
+            if prompt.startswith("You decide whether"):
+                raise ValueError("Requested tokens (2076) exceed context window of 2048")
+            return super().generate(prompt)
+
+    rag, _ = agent(FailingJudgeLLM(), {"*": [chunk("a")]})
+
+    answer = rag.ask("question", history=[])
+
+    assert answer.text == "answer"
+    assert answer.steps[-1].decision == "unparsed"

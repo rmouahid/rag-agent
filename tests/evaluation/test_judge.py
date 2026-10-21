@@ -59,3 +59,17 @@ def test_the_reason_is_whitespace_normalised_and_capped():
 
     assert "\n" not in verdict.reason
     assert len(verdict.reason) == 300
+
+
+def test_the_faithfulness_prompt_is_shrunk_to_the_model_budget():
+    class BudgetedLLM(FixedLLM):
+        prompt_budget = 120
+
+        def count_tokens(self, text):
+            return len(text.split())
+
+    llm = BudgetedLLM("SUPPORTED")
+    LLMJudge(llm).faithfulness("Q?", "A.", ["word " * 40, "other " * 40, "last " * 40])
+
+    assert len(llm.prompts[0].split()) <= 120
+    assert "word" in llm.prompts[0] and "last" not in llm.prompts[0]
