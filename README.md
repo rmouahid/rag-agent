@@ -383,6 +383,7 @@ manual testing without running the API:
 poetry run rag-agent ingest docs/ report.pdf https://example.com/page
 poetry run rag-agent ask "Who built the Eiffel Tower?"
 poetry run rag-agent ask --top-k 3 "How tall is it?"
+poetry run rag-agent eval --judge --label baseline
 ```
 
 - `ingest` takes files, folders (searched recursively for `.pdf`, `.md`
@@ -393,9 +394,16 @@ poetry run rag-agent ask --top-k 3 "How tall is it?"
 - `ask` streams the answer, then lists its sources. Without relevant
   indexed passages it says so instead of calling the model.
 
-Both use the vector store at `VECTOR_STORE_PATH`, the one the API and
-`python main.py` (interactive ingestion then chat) use too: documents
-ingested from the command line are available to the service.
+- `eval` asks every question of the golden dataset (`eval/golden/v1/`) and
+  scores the answers: evidence recall, refusals, faithfulness, relevance
+  and hallucination rate, with rules and optionally the LLM as a judge. It
+  writes a report per run and compares runs with `--compare`. See
+  [docs/evaluation.md](docs/evaluation.md).
+
+`ingest` and `ask` use the vector store at `VECTOR_STORE_PATH`, the one the
+API and `python main.py` (interactive ingestion then chat) use too: documents
+ingested from the command line are available to the service. `eval` builds
+its own in-memory index and leaves that store alone.
 
 ### Run the API
 

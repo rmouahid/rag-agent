@@ -3,9 +3,12 @@ Ligne de commande, pour un usage local sans lancer l'API :
 
     rag-agent ingest <fichier|dossier|url>...   indexe des sources
     rag-agent ask "<question>"                  répond à partir de l'index
+    rag-agent eval [--judge]                    note les réponses sur le jeu de référence
+    rag-agent eval --compare RUN RUN...         compare des runs d'évaluation
 
 L'index est celui de VECTOR_STORE_PATH, partagé avec l'API et `main.py` :
 ce qu'`ingest` y ajoute est disponible pour `ask` et pour le service.
+`eval` travaille sur un index en mémoire, sans toucher à celui-ci.
 """
 
 import argparse
@@ -14,11 +17,18 @@ import sys
 from collections.abc import Iterator
 
 from rag_agent.config import config
-from rag_agent.generation.llm import ModelNotFoundError
+from rag_agent.evaluation import harness
+from rag_agent.evaluation.dataset import DatasetError, load_dataset
+from rag_agent.evaluation.judge import LLMJudge
+from rag_agent.generation.llm import LocalLLM, ModelNotFoundError
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.generation.truncation import ContextOverflowError
 from rag_agent.pipeline import FILE_TYPES
 from rag_agent.vectorstore.retriever import Retriever
+from rag_agent.vectorstore.vector_store import VectorStore
+
+DEFAULT_DATASET = os.path.join("eval", "golden", "v1")
+DEFAULT_RUNS_DIR = os.path.join("eval", "runs")
 
 
 def _files_in(folder: str) -> list[str]:
@@ -99,6 +109,48 @@ def ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def evaluate(args: argparse.Namespace) -> int:
+    if args.compare:
+        try:
+            print(harness.compare([harness.load_report(path) for path in args.compare]), end="")
+        except (OSError, ValueError) as e:
+            print(e, file=sys.stderr)
+            return 1
+        return 0
+
+    try:
+        dataset = load_dataset(args.dataset)
+    except (OSError, DatasetError) as e:
+        print(f"{args.dataset}: {e}", file=sys.stderr)
+        return 1
+    try:
+        llm = LocalLLM()
+        judge_llm = LocalLLM(model_path=args.judge_model) if args.judge_model else llm
+    except ModelNotFoundError as e:
+        print(e, file=sys.stderr)
+        return 1
+
+    agent = RAGAgent(llm=llm, history_turns=0, retriever=Retriever(vector_store=VectorStore(path=None)))
+    n_chunks = harness.ingest_corpus(agent, dataset)
+    print(f"{dataset.name} v{dataset.version}: {len(dataset.questions)} questions, {n_chunks} chunks indexed")
+
+    def progress(i: int, result: harness.QuestionResult) -> None:
+        flag = "refused" if result.refused else ("HALLUCINATION?" if result.hallucination_rules else "ok")
+        print(f"[{i}/{len(dataset.questions)}] {result.id} {result.category}: {flag} ({result.seconds:.1f} s)")
+
+    judge = LLMJudge(judge_llm) if args.judge or args.judge_model else None
+    results = harness.evaluate(agent, dataset, top_k=args.top_k, judge=judge, progress=progress)
+    summary = harness.summarize(results)
+    meta = harness.run_metadata(
+        dataset, args.label, args.top_k, llm.model_path, judge_llm.model_path if judge else None
+    )
+    run_dir = harness.write_report(args.output_dir, meta, summary, results)
+    print(f"\nReport written to {run_dir}")
+    with open(os.path.join(run_dir, harness.REPORT_MD), encoding="utf-8") as f:
+        print("".join(f.readlines()[:30]))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rag-agent",
@@ -123,6 +175,21 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("question")
     ask_parser.add_argument("--top-k", type=int, default=5, help="chunks retrieved before relevance filtering")
     ask_parser.set_defaults(handler=ask)
+
+    eval_parser = commands.add_parser(
+        "eval",
+        help="score the answers on a golden question set",
+        description="Ingest a golden dataset into an in-memory index, ask every question and score the answers "
+        "(retrieval, refusals, faithfulness, relevance, hallucinations). See docs/evaluation.md.",
+    )
+    eval_parser.add_argument("--dataset", default=DEFAULT_DATASET, help=f"dataset folder (default: {DEFAULT_DATASET})")
+    eval_parser.add_argument("--top-k", type=int, default=5, help="chunks retrieved before relevance filtering")
+    eval_parser.add_argument("--judge", action="store_true", help="also grade answers with the LLM as a judge")
+    eval_parser.add_argument("--judge-model", help="GGUF weights of a separate judge model (implies --judge)")
+    eval_parser.add_argument("--label", default="run", help="name of the run, used in the report folder")
+    eval_parser.add_argument("--output-dir", default=DEFAULT_RUNS_DIR, help=f"default: {DEFAULT_RUNS_DIR}")
+    eval_parser.add_argument("--compare", nargs="+", metavar="RUN", help="compare existing runs instead")
+    eval_parser.set_defaults(handler=evaluate)
     return parser
 
 

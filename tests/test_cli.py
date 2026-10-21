@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from rag_agent import cli
@@ -125,3 +127,58 @@ def test_a_folder_without_supported_files_is_reported(vector_store_dir, tmp_path
 
     assert cli.main(["ingest", str(empty)]) == 1
     assert "no .pdf, .md, .markdown file" in capsys.readouterr().err
+
+
+# --- eval ---------------------------------------------------------------------
+
+
+@pytest.fixture
+def eval_llm(monkeypatch, offline_embeddings, stub_llm):
+    """The stub answers « Gustave Eiffel's company. » to every question, and grades it CORRECT as a judge"""
+    stub_llm.answer = ["CORRECT. Gustave Eiffel's company."]
+    monkeypatch.setattr(cli, "LocalLLM", lambda model_path=None: stub_llm)
+    return stub_llm
+
+
+def test_eval_writes_a_report_without_touching_the_persisted_store(eval_llm, vector_store_dir, tmp_path, capsys):
+    assert cli.main(["eval", "--label", "ci", "--output-dir", str(tmp_path / "runs")]) == 0
+
+    out = capsys.readouterr().out
+    assert "lumen-rail v1.0.0: 40 questions" in out
+    assert "[40/40] q40" in out
+    (run_dir,) = (tmp_path / "runs").iterdir()
+    assert run_dir.name.endswith("-ci")
+    assert (run_dir / "report.json").is_file()
+    assert "# RAG evaluation — ci" in (run_dir / "report.md").read_text()
+    assert not vector_store_dir.exists()
+
+
+def test_eval_with_judge_grades_every_answer(eval_llm, tmp_path):
+    assert cli.main(["eval", "--judge", "--output-dir", str(tmp_path)]) == 0
+
+    (run_dir,) = tmp_path.iterdir()
+    summary = json.loads((run_dir / "report.json").read_text())["summary"]
+    assert summary["judge"]["answer_correctness"] is not None
+
+
+def test_eval_compare_prints_the_runs_side_by_side(eval_llm, tmp_path, capsys):
+    cli.main(["eval", "--label", "a", "--output-dir", str(tmp_path)])
+    capsys.readouterr()
+
+    assert cli.main(["eval", "--compare", *map(str, tmp_path.iterdir())]) == 0
+    assert capsys.readouterr().out.startswith("| Metric | a |")
+
+
+def test_eval_of_an_invalid_dataset_fails(eval_llm, tmp_path, capsys):
+    assert cli.main(["eval", "--dataset", str(tmp_path)]) == 1
+    assert str(tmp_path) in capsys.readouterr().err
+
+
+def test_eval_without_model_weights_explains_how_to_get_them(monkeypatch, offline_embeddings, capsys):
+    def missing(model_path=None):
+        raise ModelNotFoundError("Model weights not found: models/x.gguf")
+
+    monkeypatch.setattr(cli, "LocalLLM", missing)
+
+    assert cli.main(["eval"]) == 1
+    assert "Model weights not found" in capsys.readouterr().err

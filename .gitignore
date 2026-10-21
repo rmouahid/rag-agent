@@ -10,3 +10,4 @@ venv/
 .cache/
 vector_db/
 models/
+eval/runs/

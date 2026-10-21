@@ -10,12 +10,21 @@ logger = get_logger(__name__)
 
 
 class Retriever:
-    def __init__(self, chunk_size: int | None = None, overlap: int | None = None, chunking_strategy: str | None = None):
+    def __init__(
+        self,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
+        chunking_strategy: str | None = None,
+        vector_store: VectorStore | None = None,
+    ):
         self.chunker = get_chunker(strategy=chunking_strategy, chunk_size=chunk_size, overlap=overlap)
         self.embedder = Embedder()
         # Recharge le store existant au démarrage (VECTOR_STORE_PATH) : les
-        # embeddings déjà calculés ne sont pas recalculés
-        self.vector_store = VectorStore(path=config.vector_store_path or None)
+        # embeddings déjà calculés ne sont pas recalculés. Un store fourni
+        # (en mémoire, pour une évaluation par exemple) le remplace.
+        self.vector_store = (
+            vector_store if vector_store is not None else VectorStore(path=config.vector_store_path or None)
+        )
         # L'ingestion passe par les mêmes chunker, embedder et store que la recherche
         self.pipeline = IngestionPipeline(self.chunker, self.embedder, self.vector_store)
 
