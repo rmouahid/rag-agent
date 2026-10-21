@@ -2,7 +2,8 @@ import numpy as np
 import pytest
 
 from rag_agent.vectorstore.brute_force import cosine_top_k
-from rag_agent.vectorstore.ivf import normalize
+from rag_agent.vectorstore.ivf import INDEX_FILE as IVF_INDEX_FILE
+from rag_agent.vectorstore.ivf import IVFIndex, normalize
 from rag_agent.vectorstore.pq import INDEX_FILE, PQIndex, ProductQuantizer
 
 
@@ -205,3 +206,25 @@ def test_save_and_load_round_trip(tmp_path, n_lists):
     assert (loaded.ivf is None) == (n_lists is None)
     for q in vectors[:5]:
         np.testing.assert_array_equal(loaded.search(q, 5)[0], index.search(q, 5)[0])
+
+
+def test_loading_ignores_an_unrelated_ivf_index_in_the_same_folder(tmp_path):
+    vectors = clustered_vectors()
+    IVFIndex.build(vectors, n_lists=10).save(str(tmp_path))
+    PQIndex.build(vectors, m=8, n_bits=6).save(str(tmp_path))
+
+    loaded = PQIndex.load(str(tmp_path))
+
+    assert loaded.ivf is None
+    assert PQIndex.exists(str(tmp_path))
+
+
+def test_saving_ivf_pq_leaves_the_ivf_index_file_alone(tmp_path):
+    vectors = clustered_vectors()
+    IVFIndex.build(vectors, n_lists=10).save(str(tmp_path))
+    before = (tmp_path / IVF_INDEX_FILE).read_bytes()
+
+    PQIndex.build(vectors, m=8, n_bits=6, n_lists=5).save(str(tmp_path))
+
+    assert (tmp_path / IVF_INDEX_FILE).read_bytes() == before
+    assert PQIndex.load(str(tmp_path)).ivf.n_lists == 5
