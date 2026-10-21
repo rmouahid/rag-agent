@@ -21,6 +21,8 @@ class Config:
     rerank: bool = os.getenv("RERANK", "false").lower() in ("1", "true", "yes")
     reranker_model: str = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
     rerank_candidates: int = int(os.getenv("RERANK_CANDIDATES", "20"))
+    agentic_loop: bool = os.getenv("AGENTIC_LOOP", "false").lower() in ("1", "true", "yes")
+    agentic_max_iterations: int = int(os.getenv("AGENTIC_MAX_ITERATIONS", "3"))
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "500"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "50"))
     chunking_strategy: str = os.getenv("CHUNKING_STRATEGY", "fixed")

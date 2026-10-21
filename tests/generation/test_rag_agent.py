@@ -292,10 +292,10 @@ def test_reranking_reorders_more_candidates_then_keeps_top_k():
     agent = RAGAgent(llm=FakeLLM(), reranker=reranker)
     agent.rerank_candidates = 20
 
-    status, chunks = agent.find_context("question", top_k=3)
+    context = agent.find_context("question", top_k=3)
 
-    assert status == "answered"
-    assert [c["source"] for c in chunks] == ["19.md", "18.md", "17.md"]
+    assert context.status == "answered"
+    assert [c["source"] for c in context.chunks] == ["19.md", "18.md", "17.md"]
     assert reranker.queries == ["question"]
 
 
@@ -318,9 +318,9 @@ def test_chunks_below_the_relevance_threshold_are_not_reranked():
         {"source": "b.md", "text": "b", "score": 0.1},
     ]
 
-    _, chunks = RAGAgent(llm=FakeLLM(), min_relevance_score=0.25, reranker=ReverseReranker()).find_context("q")
+    context = RAGAgent(llm=FakeLLM(), min_relevance_score=0.25, reranker=ReverseReranker()).find_context("q")
 
-    assert [c["source"] for c in chunks] == ["a.md"]
+    assert [c["source"] for c in context.chunks] == ["a.md"]
 
 
 def test_rewritten_queries_are_reranked_against_the_original_question(monkeypatch):
