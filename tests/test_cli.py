@@ -182,3 +182,33 @@ def test_eval_without_model_weights_explains_how_to_get_them(monkeypatch, offlin
 
     assert cli.main(["eval"]) == 1
     assert "Model weights not found" in capsys.readouterr().err
+
+
+def test_eval_retrieval_only_needs_no_model_weights(monkeypatch, offline_embeddings, tmp_path, capsys):
+    def missing(model_path=None):
+        raise ModelNotFoundError("Model weights not found")
+
+    monkeypatch.setattr(cli, "LocalLLM", missing)
+
+    assert cli.main(["eval", "--retrieval-only", "--label", "ret", "--output-dir", str(tmp_path)]) == 0
+    assert "evidence recall" in capsys.readouterr().out
+    (run_dir,) = tmp_path.iterdir()
+    assert json.loads((run_dir / "report.json").read_text())["meta"]["agent"]["generation"] is False
+
+
+@pytest.mark.parametrize("flag", ["--rewrite", "--judge"])
+def test_eval_retrieval_only_refuses_options_that_need_the_llm(offline_embeddings, flag, capsys):
+    assert cli.main(["eval", "--retrieval-only", flag]) == 1
+    assert "without the LLM" in capsys.readouterr().err
+
+
+def test_eval_rerank_loads_the_cross_encoder(eval_llm, monkeypatch, tmp_path):
+    class FakeReranker:
+        def rerank(self, query, chunks):
+            return chunks
+
+    monkeypatch.setattr(cli, "CrossEncoderReranker", FakeReranker)
+
+    assert cli.main(["eval", "--rerank", "--output-dir", str(tmp_path)]) == 0
+    (run_dir,) = tmp_path.iterdir()
+    assert json.loads((run_dir / "report.json").read_text())["meta"]["agent"]["reranking"] is True

@@ -10,7 +10,20 @@ poetry run rag-agent eval                          # rule-based metrics only
 poetry run rag-agent eval --judge --label baseline # + the local LLM as a judge
 poetry run rag-agent eval --judge-model models/other.gguf   # a separate judge model
 poetry run rag-agent eval --compare eval/runs/*-baseline eval/runs/*-rerank
+poetry run rag-agent eval --retrieval-only --rerank   # context only, no LLM needed
 ```
+
+`--rewrite` and `--rerank` switch on query rewriting and cross-encoder
+reranking for the run (see the README, "Retrieval pipeline"), whatever
+`.env` says; the report records which steps were on.
+
+`--retrieval-only` scores the context alone: it runs query search,
+reranking and the relevance filter, but loads no LLM and generates nothing.
+Only evidence recall, MRR, refusals for lack of relevant context and latency
+are reported. It is deterministic, takes seconds, and runs on machines that
+cannot hold the model, which makes it the right check for chunking,
+embedding, index or reranking changes. It cannot be combined with
+`--rewrite` or `--judge`, which need the LLM.
 
 The corpus of the dataset is ingested into an **in-memory** store: the index
 of `VECTOR_STORE_PATH` is neither read nor modified. Every question is asked

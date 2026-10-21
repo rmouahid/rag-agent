@@ -177,3 +177,33 @@ def test_the_judge_section_is_absent_without_a_judge(make_agent, dataset):
 
     assert "judge" not in summary
     assert summary["refusals"]["false_refusal_rate"] is None
+
+
+def test_retrieval_only_scores_the_context_without_generating(make_agent, dataset):
+    agent = make_agent({})
+    agent.llm.generate = lambda prompt: pytest.fail("the LLM must not be called")
+    harness.ingest_corpus(agent, dataset)
+
+    results = harness.evaluate(agent, dataset, top_k=5, retrieval_only=True)
+    summary = harness.summarize(results)
+
+    assert all(r.retrieval_only and r.answer == "" for r in results)
+    assert summary["retrieval"]["evidence_recall"] > 0
+    assert "rules" not in summary and "judge" not in summary
+    assert summary["by_category"]["factual"]["hallucination_rate_rules"] is None
+    markdown = harness.to_markdown(
+        {
+            "label": "r",
+            "dataset": {"name": "d", "version": "1", "fingerprint": "f"},
+            "model": "none",
+            "judge_model": None,
+            "top_k": 5,
+            "date": "now",
+            "machine": "m",
+            "agent": harness.agent_options(agent, retrieval_only=True),
+        },
+        summary,
+        results,
+    )
+    assert "Hallucination rate, rules" not in markdown
+    assert "generation off" in markdown

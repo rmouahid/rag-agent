@@ -323,6 +323,33 @@ poetry run rag-agent eval --rewrite --label rewrite
 poetry run rag-agent eval --compare eval/runs/*-baseline eval/runs/*-rewrite
 ```
 
+### Cross-encoder reranking
+
+The vector search compares two embeddings computed separately: question and
+chunk never "see" each other. With `RERANK=true`, the first
+`RERANK_CANDIDATES` (default `20`) results are rescored by a cross-encoder
+(`RERANKER_MODEL`, default `cross-encoder/ms-marco-MiniLM-L-6-v2`, about
+90 MB, downloaded on first use) that reads each (question, chunk) pair
+together, and only the best `top_k` reach the prompt, in that order. The
+cosine score is kept for the `MIN_RELEVANCE_SCORE` filter, and when the
+prompt must be shortened the chunk with the lowest cross-encoder score goes
+first. Rewritten queries are reranked against the original question.
+
+Measured on the golden dataset with `rag-agent eval --retrieval-only`
+(context only, no LLM; real `all-MiniLM-L6-v2` embeddings, 1 CPU):
+
+| | top_k = 3 | + reranking | top_k = 5 | + reranking |
+|---|---:|---:|---:|---:|
+| Evidence recall | 89.0% | **98.6%** | 97.6% | **100.0%** |
+| MRR | 0.795 | **0.952** | 0.810 | **0.952** |
+| Latency per question | < 0.1 s | 0.8 s | < 0.1 s | 0.8 s |
+
+Reranking puts the passage that answers the question first in 95% of the
+cases instead of 80%, so a smaller `top_k` (a shorter prompt, a faster
+answer) loses almost nothing. The relevance threshold, on the other hand,
+never rejects the 5 unanswerable questions: it is the LLM that must say the
+documents do not answer, which the full evaluation measures.
+
 ## Roadmap
 
 This project is under active development. The full plan — local LLM migration, IVF/HNSW/PQ vector search, a FastAPI service, an answer-quality evaluation harness, and an agentic retrieval loop — is tracked as [GitHub milestones and issues](../../issues).

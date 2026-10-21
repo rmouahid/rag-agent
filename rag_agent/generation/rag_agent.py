@@ -8,6 +8,7 @@ from rag_agent.generation.query_rewriter import QueryRewriter
 from rag_agent.generation.truncation import fit_prompt
 from rag_agent.logging_config import get_logger
 from rag_agent.pipeline import UnsupportedSourceError, source_type  # noqa: F401 (re-exported)
+from rag_agent.vectorstore.reranker import CrossEncoderReranker
 from rag_agent.vectorstore.retriever import Retriever
 
 logger = get_logger(__name__)
@@ -30,6 +31,7 @@ class RAGAgent:
         min_relevance_score: float | None = None,
         retriever: Retriever | None = None,
         query_rewriting: bool | None = None,
+        reranker: CrossEncoderReranker | None = None,
     ):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
@@ -46,6 +48,10 @@ class RAGAgent:
         # le retrieval : un appel au LLM de plus par question
         query_rewriting = config.query_rewriting if query_rewriting is None else query_rewriting
         self.query_rewriter = QueryRewriter(self.llm, config.max_rewritten_queries) if query_rewriting else None
+        # Reranking des candidats par un cross-encoder (RERANK) : une passe du
+        # modèle par candidat, sur RERANK_CANDIDATES candidats
+        self.reranker = reranker or (CrossEncoderReranker() if config.rerank else None)
+        self.rerank_candidates = config.rerank_candidates
 
         # Ingestion : source → chunks indexés dans le store du retriever
         self.pipeline = self.retriever.pipeline
@@ -61,24 +67,43 @@ class RAGAgent:
         """
         return self.pipeline.ingest(source, source_name=source_name).chunk_ids
 
-    def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[Status, str, list[Source]]:
+    def find_context(
+        self, question: str, top_k: int = 5, history: list[dict] | None = None
+    ) -> tuple[Status, list[dict]]:
         """
-        Question → Retrieve → filtre de pertinence → Prompt ajusté à la
-        fenêtre de contexte. Retourne (issue, prompt, sources placées dans le
-        prompt) ; hors `ANSWERED`, le prompt est vide et le LLM inutile
+        Question → (réécriture) → Retrieve → (reranking) → filtre de
+        pertinence. Retourne l'issue et les chunks retenus, du plus pertinent
+        au moins pertinent, sans appeler le LLM pour répondre.
         """
         logger.info("Recherche des chunks pertinents...")
+        n_candidates = max(top_k, self.rerank_candidates) if self.reranker is not None else top_k
         if self.query_rewriter is not None:
-            chunks = self.retriever.retrieve_many(self.query_rewriter.rewrite(question, history), top_k=top_k)
+            queries = self.query_rewriter.rewrite(question, history)
+            chunks = self.retriever.retrieve_many(queries, top_k=n_candidates)
         else:
-            chunks = self.retriever.retrieve(question, top_k=top_k)
+            chunks = self.retriever.retrieve(question, top_k=n_candidates)
         if not chunks:
-            return outcome.NO_DOCUMENTS, "", []
+            return outcome.NO_DOCUMENTS, []
 
         relevant = [c for c in chunks if c.get("score", 1.0) >= self.min_relevance_score]
         logger.debug("%d chunks récupérés, %d assez pertinents", len(chunks), len(relevant))
         if not relevant:
-            return outcome.NO_RELEVANT_CONTEXT, "", []
+            return outcome.NO_RELEVANT_CONTEXT, []
+        if self.reranker is not None:
+            # Le cross-encoder note la paire avec la question d'origine, pas
+            # avec ses réécritures
+            relevant = self.reranker.rerank(question, relevant)
+        return outcome.ANSWERED, relevant[:top_k]
+
+    def _prepare(self, question: str, top_k: int, history: list[dict]) -> tuple[Status, str, list[Source]]:
+        """
+        Contexte retenu (find_context) → Prompt ajusté à la fenêtre de
+        contexte. Retourne (issue, prompt, sources placées dans le prompt) ;
+        hors `ANSWERED`, le prompt est vide et le LLM inutile
+        """
+        status, relevant = self.find_context(question, top_k, history)
+        if status != outcome.ANSWERED:
+            return status, "", []
 
         prompt, relevant, _ = fit_prompt(question, relevant, history, self.llm.count_tokens, self.llm.prompt_budget)
         return outcome.ANSWERED, prompt, [Source.from_chunk(c) for c in relevant]
