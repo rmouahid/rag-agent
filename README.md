@@ -298,6 +298,50 @@ python benchmarks/ivf_benchmark.py --store vector_db   # an existing store
 The plot needs `matplotlib`, which is optional. Without it, only the
 Markdown table is written.
 
+### Benchmark: all backends (brute-force, IVF, HNSW, PQ, IVF+PQ)
+
+Measured on **32,000 real chunks** drawn from a 120,000-chunk store (108
+Project Gutenberg books, same chunker and embedding model as above), on
+the same single-core machine. Memory is what a query needs: the float32
+vectors plus the index structure, or only the codes and codebooks for PQ.
+
+| Method | Setting | Recall@10 | Median latency | Speed-up | Memory | Build |
+|---|---|---:|---:|---:|---:|---:|
+| brute-force | exact scan | 1.000 | 56.0 ms | 1x | 46.9 MB | — |
+| IVF (179 lists) | nprobe=16 | 0.898 | 1.87 ms | 30x | 47.6 MB | 5.6 s |
+| IVF | nprobe=64 | 0.989 | 13.4 ms | 4.2x | 47.6 MB | 5.6 s |
+| HNSW (M=16) | ef=32 | 0.907 | 0.51 ms | 110x | 53.5 MB | 113 s |
+| HNSW | ef=64 | 0.958 | 0.91 ms | 61x | 53.5 MB | 113 s |
+| HNSW | ef=128 | 0.985 | 1.71 ms | 33x | 53.5 MB | 113 s |
+| PQ | m=48 (48 B/vector) | 0.588 | 6.20 ms | 9x | 2.2 MB | 174 s |
+| PQ | m=96 (96 B/vector) | 0.775 | 11.9 ms | 4.7x | 3.7 MB | 444 s |
+| IVF+PQ | m=48, nprobe=16 | 0.569 | 0.75 ms | 75x | 3.0 MB | 232 s |
+
+![Recall/latency trade-off of every backend](docs/benchmarks/ann_recall_latency.png)
+
+- **HNSW gives the best recall for a given latency**: 0.96 recall under
+  1 ms, where IVF needs about 13 ms for 0.99. It costs a slow build (about
+  2 minutes for 32k vectors on one core) and 14% more memory for the graph,
+  so it suits a store that is built once and queried often.
+- **IVF builds in seconds** and stays the pragmatic choice for a store that
+  is re-indexed often; `nprobe` trades recall for latency.
+- **PQ trades recall for memory**: 21x less memory at m=48, but recall
+  stays below 0.6, because codes this short cannot separate close
+  neighbours among 384-dimensional embeddings. IVF+PQ makes it fast, not
+  more accurate. It only makes sense when the vectors no longer fit in RAM,
+  ideally followed by re-ranking the candidates against the full vectors.
+- The brute-force scan was slower in this run than in the IVF benchmark
+  above (56 ms against 24 ms), most likely because the machine was short
+  of memory at the time. Compare speed-ups within one table, where every
+  method ran under the same conditions.
+
+Full results are in [`docs/benchmarks/ann.md`](docs/benchmarks/ann.md).
+To reproduce them on a persisted store:
+
+```bash
+python benchmarks/ann_benchmark.py --store bench_store --sizes 32000 --name ann
+```
+
 ## Retrieval pipeline
 
 By default a question goes straight to the vector search. Optional steps,
