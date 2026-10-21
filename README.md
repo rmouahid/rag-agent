@@ -350,6 +350,31 @@ answer) loses almost nothing. The relevance threshold, on the other hand,
 never rejects the 5 unanswerable questions: it is the LLM that must say the
 documents do not answer, which the full evaluation measures.
 
+### Agentic retrieval loop
+
+A single retrieve-then-generate pass answers with whatever the first search
+found, even when it is not enough. With `AGENTIC_LOOP=true`, the agent
+decides: after each search, the local LLM reads the passages gathered so far
+and replies either `ENOUGH`, or `SEARCH: <query>` with a new query for the
+missing information. The new passages are added to the context and the loop
+goes on, up to `AGENTIC_MAX_ITERATIONS` searches (default `3`, the first one
+included).
+
+- The decision comes **before** generating the answer: judging the context
+  costs a few tokens, generating an answer only to throw it away would cost
+  hundreds. The answer is generated once, on the final context.
+- The loop stops on `ENOUGH`, on a query already tried (it would bring back
+  the same passages), on a reply it cannot parse (rather than looping on
+  noise) and at the iteration limit.
+- Follow-up searches go through the same reranking and relevance filter as
+  the first one; query rewriting applies to the first search only.
+- Each search is logged with its query and the new sources it brought, and
+  returned in `Answer.steps`; `rag-agent ask` lists them after the sources.
+
+Cost: one short LLM call per extra search, plus the search itself.
+`rag-agent eval --agentic` measures what it brings on the golden dataset
+(answer quality and searches per question).
+
 ## Roadmap
 
 This project is under active development. The full plan — local LLM migration, IVF/HNSW/PQ vector search, a FastAPI service, an answer-quality evaluation harness, and an agentic retrieval loop — is tracked as [GitHub milestones and issues](../../issues).

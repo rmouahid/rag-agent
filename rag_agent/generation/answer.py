@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Final, Literal
+from typing import Any, Final, Literal
 
 EXCERPT_LENGTH = 200
 
@@ -53,6 +53,8 @@ class Answer:
     text: str
     sources: list[Source] = field(default_factory=list)
     status: Status = ANSWERED
+    # Recherches effectuées (une seule hors boucle agentique), pour l'observabilité
+    steps: list[Any] = field(default_factory=list)
 
     def __str__(self) -> str:
         return self.text
@@ -75,6 +77,7 @@ class StreamingAnswer:
     tokens: Iterator[str]
     sources: list[Source] = field(default_factory=list)
     status: Status = ANSWERED
+    steps: list[Any] = field(default_factory=list)
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.tokens)

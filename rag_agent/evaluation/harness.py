@@ -73,6 +73,8 @@ class QuestionResult:
     correctness: str | None = None
     correctness_reason: str = ""
     hallucination_judge: bool | None = None
+    # Requêtes de chaque recherche (plusieurs avec la boucle agentique)
+    searches: list[str] = dataclasses.field(default_factory=list)
     retrieval_only: bool = False
 
 
@@ -90,8 +92,9 @@ def evaluate_retrieval(agent: RAGAgent, question: GoldenQuestion, top_k: int) ->
     « refusée » quand aucun chunk n'atteint le seuil de pertinence.
     """
     start = time.perf_counter()
-    status, chunks = agent.find_context(question.question, top_k=top_k, history=[])
+    found = agent.find_context(question.question, top_k=top_k, history=[])
     seconds = time.perf_counter() - start
+    status, chunks = found.status, found.chunks
     context = [c["text"] for c in chunks]
     return QuestionResult(
         id=question.id,
@@ -109,6 +112,7 @@ def evaluate_retrieval(agent: RAGAgent, question: GoldenQuestion, top_k: int) ->
         unsupported_numbers=[],
         reference_overlap=0.0,
         hallucination_rules=False,
+        searches=[step.query for step in found.steps],
         retrieval_only=True,
     )
 
@@ -146,6 +150,7 @@ def evaluate_question(agent: RAGAgent, question: GoldenQuestion, top_k: int, jud
         unsupported_numbers=sorted(unsupported_numbers(answer.text, grounding)),
         reference_overlap=reference_overlap(answer.text, question.reference_answer),
         hallucination_rules=hallucination_rules,
+        searches=[step.query for step in answer.steps],
     )
 
     if judge is not None:
@@ -214,6 +219,7 @@ def summarize(results: list[QuestionResult]) -> dict:
             "p50": float(np.median([r.seconds for r in results])) if results else None,
             "mean": _mean([r.seconds for r in results]),
         },
+        "searches_per_question": _mean([float(len(r.searches) or 1) for r in results]),
     }
     retrieval_only = any(r.retrieval_only for r in results)
     if not retrieval_only:
@@ -280,6 +286,7 @@ def agent_options(agent: RAGAgent, retrieval_only: bool = False) -> dict:
     return {
         "query_rewriting": agent.query_rewriter is not None,
         "reranking": agent.reranker is not None,
+        "agentic_loop": agent.sufficiency_judge is not None,
         "generation": not retrieval_only,
     }
 
@@ -331,6 +338,7 @@ def to_markdown(meta: dict, summary: dict, results: list[QuestionResult]) -> str
             f"| Unparsed judge verdicts | {judge['unparsed_verdicts']} |",
         ]
     lines += [
+        f"| Searches per question | {_num(summary.get('searches_per_question'), 2)} |",
         f"| Median latency per question | {_num(summary['latency_s']['p50'], 1)} s |",
         "",
         "## By category",
@@ -390,6 +398,7 @@ COMPARED_METRICS = [
     ("Faithfulness (judge)", ("judge", "faithfulness"), _pct),
     ("Answer correctness (judge)", ("judge", "answer_correctness"), _pct),
     ("Hallucination rate (judge)", ("judge", "hallucination_rate"), _pct),
+    ("Searches per question", ("searches_per_question", None), lambda v: _num(v, 2)),
     ("Median latency (s)", ("latency_s", "p50"), lambda v: _num(v, 1)),
 ]
 
@@ -406,7 +415,7 @@ def compare(reports: list[dict]) -> str:
     header = "| Metric | " + " | ".join(r["meta"]["label"] for r in reports) + " |"
     lines = [header, "|---|" + "---:|" * len(reports)]
     for name, (section, key), fmt in COMPARED_METRICS:
-        values = [r["summary"].get(section, {}).get(key) for r in reports]
+        values = [r["summary"].get(section) if key is None else r["summary"].get(section, {}).get(key) for r in reports]
         if all(v is None for v in values):
             continue
         lines.append(f"| {name} | " + " | ".join(fmt(v) for v in values) + " |")

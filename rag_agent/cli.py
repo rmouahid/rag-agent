@@ -108,6 +108,11 @@ def ask(args: argparse.Namespace) -> int:
     print()
     if answer.sources:
         print(f"\nSources:\n{answer.format_sources()}")
+    if len(answer.steps) > 1:
+        searches = "\n".join(
+            f"{i}. {step.query} ({step.n_chunks} new chunks)" for i, step in enumerate(answer.steps, 1)
+        )
+        print(f"\nSearches (agentic loop):\n{searches}")
     return 0
 
 
@@ -134,8 +139,11 @@ def evaluate(args: argparse.Namespace) -> int:
     except (OSError, DatasetError) as e:
         print(f"{args.dataset}: {e}", file=sys.stderr)
         return 1
-    if args.retrieval_only and (args.rewrite or args.judge or args.judge_model):
-        print("--retrieval-only runs without the LLM: it cannot rewrite queries or judge answers", file=sys.stderr)
+    if args.retrieval_only and (args.rewrite or args.agentic or args.judge or args.judge_model):
+        print(
+            "--retrieval-only runs without the LLM: it cannot rewrite queries, run the agentic loop or judge answers",
+            file=sys.stderr,
+        )
         return 1
     try:
         # Sans génération, l'agent n'appelle jamais son LLM : NoLLM le garantit
@@ -151,6 +159,7 @@ def evaluate(args: argparse.Namespace) -> int:
         retriever=Retriever(vector_store=VectorStore(path=None)),
         query_rewriting=False if args.retrieval_only else args.rewrite or None,
         reranker=CrossEncoderReranker() if args.rerank else None,
+        agentic=False if args.retrieval_only else args.agentic or None,
     )
     n_chunks = harness.ingest_corpus(agent, dataset)
     print(f"{dataset.name} v{dataset.version}: {len(dataset.questions)} questions, {n_chunks} chunks indexed")
@@ -218,6 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eval_parser.add_argument(
         "--rerank", action="store_true", help="rerank candidates with the cross-encoder (default: RERANK)"
+    )
+    eval_parser.add_argument(
+        "--agentic", action="store_true", help="run the agentic retrieval loop (default: AGENTIC_LOOP)"
     )
     eval_parser.add_argument(
         "--retrieval-only",

@@ -13,9 +13,10 @@ poetry run rag-agent eval --compare eval/runs/*-baseline eval/runs/*-rerank
 poetry run rag-agent eval --retrieval-only --rerank   # context only, no LLM needed
 ```
 
-`--rewrite` and `--rerank` switch on query rewriting and cross-encoder
-reranking for the run (see the README, "Retrieval pipeline"), whatever
-`.env` says; the report records which steps were on.
+`--rewrite`, `--rerank` and `--agentic` switch on query rewriting,
+cross-encoder reranking and the agentic retrieval loop for the run (see the
+README, "Retrieval pipeline"), whatever `.env` says; the report records
+which steps were on, and the number of searches per question.
 
 `--retrieval-only` scores the context alone: it runs query search,
 reranking and the relevance filter, but loads no LLM and generates nothing.
@@ -23,7 +24,7 @@ Only evidence recall, MRR, refusals for lack of relevant context and latency
 are reported. It is deterministic, takes seconds, and runs on machines that
 cannot hold the model, which makes it the right check for chunking,
 embedding, index or reranking changes. It cannot be combined with
-`--rewrite` or `--judge`, which need the LLM.
+`--rewrite`, `--agentic` or `--judge`, which need the LLM.
 
 The corpus of the dataset is ingested into an **in-memory** store: the index
 of `VECTOR_STORE_PATH` is neither read nor modified. Every question is asked
