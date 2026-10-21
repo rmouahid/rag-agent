@@ -232,3 +232,41 @@ def test_a_given_history_is_capped_to_the_last_turns():
 
     assert "old question" not in llm.prompts[0]
     assert "recent question" in llm.prompts[0]
+
+
+# --- query rewriting ----------------------------------------------------------
+
+
+class RewritingLLM(FakeLLM):
+    """Answers the rewriting prompt with search queries, any other prompt with « answer »"""
+
+    def generate(self, prompt):
+        if prompt.startswith("Rewrite the question"):
+            return "Amber Line last train\nbicycle rules"
+        return super().generate(prompt)
+
+
+def test_rewriting_searches_the_question_and_its_rewrites(monkeypatch):
+    calls = []
+
+    def retrieve_many(self, queries, top_k):
+        calls.append((queries, top_k))
+        return [{"source": "a.md", "text": "text", "score": 0.9}]
+
+    monkeypatch.setattr(FakeRetriever, "retrieve_many", retrieve_many, raising=False)
+    llm = RewritingLLM()
+
+    answer = RAGAgent(llm=llm, query_rewriting=True).ask("Last train, and bikes?", top_k=4)
+
+    assert calls == [(["Last train, and bikes?", "Amber Line last train", "bicycle rules"], 4)]
+    assert answer.text == "answer"
+    assert len(llm.prompts) == 1  # le prompt de réécriture ne passe pas par FakeLLM.generate
+
+
+def test_rewriting_is_off_by_default():
+    FakeRetriever.chunks = [{"source": "a.md", "text": "text"}]
+
+    agent = RAGAgent(llm=RewritingLLM())
+
+    assert agent.query_rewriter is None
+    assert agent.ask("question").text == "answer"

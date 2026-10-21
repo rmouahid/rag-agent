@@ -16,6 +16,8 @@ class Config:
     llm_threads: int = int(os.getenv("LLM_THREADS", "0"))
     min_relevance_score: float = float(os.getenv("MIN_RELEVANCE_SCORE", "0.25"))
     history_turns: int = int(os.getenv("HISTORY_TURNS", "3"))
+    query_rewriting: bool = os.getenv("QUERY_REWRITING", "false").lower() in ("1", "true", "yes")
+    max_rewritten_queries: int = int(os.getenv("MAX_REWRITTEN_QUERIES", "3"))
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "500"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "50"))
     chunking_strategy: str = os.getenv("CHUNKING_STRATEGY", "fixed")

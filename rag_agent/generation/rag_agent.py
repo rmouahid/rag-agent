@@ -4,6 +4,7 @@ from rag_agent.config import config
 from rag_agent.generation import answer as outcome
 from rag_agent.generation.answer import Answer, Source, Status, StreamingAnswer
 from rag_agent.generation.llm import LocalLLM
+from rag_agent.generation.query_rewriter import QueryRewriter
 from rag_agent.generation.truncation import fit_prompt
 from rag_agent.logging_config import get_logger
 from rag_agent.pipeline import UnsupportedSourceError, source_type  # noqa: F401 (re-exported)
@@ -28,6 +29,7 @@ class RAGAgent:
         history_turns: int | None = None,
         min_relevance_score: float | None = None,
         retriever: Retriever | None = None,
+        query_rewriting: bool | None = None,
     ):
         # Chargé dès la construction : sans poids, l'agent échoue tout de
         # suite avec un message clair plutôt qu'à la première question.
@@ -40,6 +42,10 @@ class RAGAgent:
         # En dessous de ce score cosinus, un chunk n'est pas considéré comme
         # une source : mieux vaut ne pas répondre que répondre sans ancrage
         self.min_relevance_score = config.min_relevance_score if min_relevance_score is None else min_relevance_score
+        # Réécriture de la question en requêtes de recherche par le LLM, avant
+        # le retrieval : un appel au LLM de plus par question
+        query_rewriting = config.query_rewriting if query_rewriting is None else query_rewriting
+        self.query_rewriter = QueryRewriter(self.llm, config.max_rewritten_queries) if query_rewriting else None
 
         # Ingestion : source → chunks indexés dans le store du retriever
         self.pipeline = self.retriever.pipeline
@@ -62,7 +68,10 @@ class RAGAgent:
         prompt) ; hors `ANSWERED`, le prompt est vide et le LLM inutile
         """
         logger.info("Recherche des chunks pertinents...")
-        chunks = self.retriever.retrieve(question, top_k=top_k)
+        if self.query_rewriter is not None:
+            chunks = self.retriever.retrieve_many(self.query_rewriter.rewrite(question, history), top_k=top_k)
+        else:
+            chunks = self.retriever.retrieve(question, top_k=top_k)
         if not chunks:
             return outcome.NO_DOCUMENTS, "", []
 

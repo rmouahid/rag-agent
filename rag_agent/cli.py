@@ -130,7 +130,12 @@ def evaluate(args: argparse.Namespace) -> int:
         print(e, file=sys.stderr)
         return 1
 
-    agent = RAGAgent(llm=llm, history_turns=0, retriever=Retriever(vector_store=VectorStore(path=None)))
+    agent = RAGAgent(
+        llm=llm,
+        history_turns=0,
+        retriever=Retriever(vector_store=VectorStore(path=None)),
+        query_rewriting=args.rewrite or None,
+    )
     n_chunks = harness.ingest_corpus(agent, dataset)
     print(f"{dataset.name} v{dataset.version}: {len(dataset.questions)} questions, {n_chunks} chunks indexed")
 
@@ -144,6 +149,7 @@ def evaluate(args: argparse.Namespace) -> int:
     meta = harness.run_metadata(
         dataset, args.label, args.top_k, llm.model_path, judge_llm.model_path if judge else None
     )
+    meta["agent"] = harness.agent_options(agent)
     run_dir = harness.write_report(args.output_dir, meta, summary, results)
     print(f"\nReport written to {run_dir}")
     with open(os.path.join(run_dir, harness.REPORT_MD), encoding="utf-8") as f:
@@ -186,6 +192,9 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--top-k", type=int, default=5, help="chunks retrieved before relevance filtering")
     eval_parser.add_argument("--judge", action="store_true", help="also grade answers with the LLM as a judge")
     eval_parser.add_argument("--judge-model", help="GGUF weights of a separate judge model (implies --judge)")
+    eval_parser.add_argument(
+        "--rewrite", action="store_true", help="rewrite questions into search queries (default: QUERY_REWRITING)"
+    )
     eval_parser.add_argument("--label", default="run", help="name of the run, used in the report folder")
     eval_parser.add_argument("--output-dir", default=DEFAULT_RUNS_DIR, help=f"default: {DEFAULT_RUNS_DIR}")
     eval_parser.add_argument("--compare", nargs="+", metavar="RUN", help="compare existing runs instead")
