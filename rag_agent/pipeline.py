@@ -11,7 +11,7 @@ ingèrent toutes deux par lui.
 from dataclasses import dataclass, field
 
 from rag_agent.chunking.chunker import FixedSizeChunker
-from rag_agent.chunking.dedup import deduplicate_chunks
+from rag_agent.chunking.dedup import ShingleIndex, deduplicate_chunks
 from rag_agent.chunking.sentence_chunker import SentenceChunker
 from rag_agent.ingestion.document import Document
 from rag_agent.ingestion.md_loader import MarkdownLoader
@@ -77,6 +77,10 @@ class IngestionPipeline:
         self.embedder = embedder
         self.vector_store = vector_store
         self.loaders = loaders or {"pdf": PDFLoader(), "markdown": MarkdownLoader(), "web": WebLoader()}
+        # Index de déduplication du corpus, gardé entre deux ingestions :
+        # le reconstruire à chaque fois coûterait autant que tout comparer
+        self._dedup_index: ShingleIndex | None = None
+        self._dedup_last_id: str | None = None
 
     def ingest(self, source: str, source_name: str | None = None) -> IngestionResult:
         """
@@ -91,6 +95,20 @@ class IngestionPipeline:
             document.source = source_name
         return self.ingest_document(document)
 
+    def _current_dedup_index(self) -> ShingleIndex:
+        """
+        Index de déduplication à jour, ou reconstruit si le store a changé
+        en dehors du pipeline (rechargé, remplacé) : il doit encore contenir
+        en tête, dans le même ordre, les chunks déjà indexés
+        """
+        index, chunks = self._dedup_index, self.vector_store.chunks
+        n = index.n_texts if index is not None else 0
+        valid = index is not None and n <= len(chunks) and (n == 0 or chunks[n - 1]["id"] == self._dedup_last_id)
+        if not valid:
+            index = self._dedup_index = ShingleIndex()
+        assert index is not None
+        return index
+
     def ingest_document(self, document: Document) -> IngestionResult:
         """
         Document déjà chargé → chunks → déduplication → embeddings → vector store
@@ -104,14 +122,20 @@ class IngestionPipeline:
         # Déduplique contre le batch courant et le corpus déjà indexé
         # (ré-ingestion de la même source, ou sources qui se chevauchent)
         existing_texts = [c["text"] for c in self.vector_store.chunks]
-        chunks = deduplicate_chunks(chunks, existing_texts=existing_texts)
+        chunks = deduplicate_chunks(chunks, existing_texts=existing_texts, index=self._current_dedup_index())
         logger.debug("%d chunks après déduplication", len(chunks))
         if not chunks:
             logger.info("Aucun chunk nouveau après déduplication")
             return result
 
-        embeddings = self.embedder.embed_chunks(chunks)
-        self.vector_store.add(chunks, embeddings)
+        try:
+            embeddings = self.embedder.embed_chunks(chunks)
+            self.vector_store.add(chunks, embeddings)
+        except Exception:
+            # L'index contient déjà ces chunks, absents du store : à refaire
+            self._dedup_index = None
+            raise
+        self._dedup_last_id = self.vector_store.chunks[-1]["id"] if self.vector_store.chunks else None
         result.chunk_ids = [c.id for c in chunks]
         logger.info("%d chunks indexés (%d doublons écartés)", result.chunks_indexed, result.duplicates)
         return result

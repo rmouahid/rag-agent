@@ -86,3 +86,46 @@ def test_the_agent_ingests_through_its_pipeline(vector_store_dir, stub_llm, samp
 
     assert agent.pipeline.vector_store is agent.retriever.vector_store
     assert ids == [c["id"] for c in agent.retriever.vector_store.chunks]
+
+
+# --- deduplication index ------------------------------------------------------
+
+
+def test_the_dedup_index_is_built_once_and_extended(pipeline, sample_markdown, monkeypatch):
+    from rag_agent.chunking.dedup import ShingleIndex
+
+    added = []
+    original = ShingleIndex.add_text
+    monkeypatch.setattr(ShingleIndex, "add_text", lambda self, text: (added.append(text), original(self, text)))
+    first = pipeline.ingest(str(sample_markdown))
+    pipeline.ingest_document(Document(text="A new paragraph about bridges and rivers.", source="new.md", metadata={}))
+
+    # Le corpus n'est jamais ré-indexé : les chunks retenus entrent dans l'index au fil de l'eau
+    assert added == []
+    assert pipeline._dedup_index.n_texts == len(pipeline.vector_store) == first.chunks_indexed + 1
+    assert pipeline.ingest(str(sample_markdown)).chunks_indexed == 0
+
+
+def test_the_dedup_index_is_rebuilt_when_the_store_is_reloaded(pipeline, sample_markdown, tmp_path):
+    other = IngestionPipeline(pipeline.chunker, pipeline.embedder, VectorStore(index_type="brute-force"))
+    other.ingest_document(Document(text="Bridges cross rivers in many old towns.", source="b.md", metadata={}))
+    other.vector_store.save(str(tmp_path / "other"))
+    pipeline.ingest(str(sample_markdown))
+
+    pipeline.vector_store.load(str(tmp_path / "other"))
+
+    # L'ancien index contenait la tour Eiffel : il ne doit plus écarter ses chunks
+    assert pipeline.ingest(str(sample_markdown)).chunks_indexed > 0
+
+
+def test_a_failed_ingestion_drops_the_dedup_index(pipeline, sample_markdown, monkeypatch):
+    def broken(chunks):
+        raise RuntimeError("embedding model crashed")
+
+    monkeypatch.setattr(pipeline.embedder, "embed_chunks", broken)
+    with pytest.raises(RuntimeError):
+        pipeline.ingest(str(sample_markdown))
+    monkeypatch.undo()
+
+    assert pipeline._dedup_index is None
+    assert pipeline.ingest(str(sample_markdown)).chunks_indexed > 0
