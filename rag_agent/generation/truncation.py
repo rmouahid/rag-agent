@@ -10,6 +10,7 @@ retirer le dernier chunk donnerait une réponse sans ancrage.
 """
 
 from collections.abc import Callable
+from typing import TypeVar
 
 from rag_agent.generation.prompt import build_prompt
 from rag_agent.logging_config import get_logger
@@ -66,3 +67,23 @@ def fit_prompt(
                 f"The prompt needs {size} tokens but only {budget} are available: "
                 "shorten the question or increase LLM_CONTEXT_SIZE."
             )
+
+
+T = TypeVar("T")
+
+
+def shrink_to_budget(
+    build: Callable[[list[T]], str], items: list[T], count_tokens: Callable[[str], int], budget: int
+) -> str:
+    """
+    Prompt `build(items)` réduit en retirant les derniers éléments (les
+    moins pertinents) jusqu'à tenir dans `budget` tokens. Pour les prompts
+    auxiliaires (jugements) : contrairement à `fit_prompt`, rien n'est levé,
+    le prompt sans aucun élément est retourné en dernier recours.
+    """
+    items = list(items)
+    while True:
+        prompt = build(items)
+        if not items or count_tokens(prompt) <= budget:
+            return prompt
+        items.pop()

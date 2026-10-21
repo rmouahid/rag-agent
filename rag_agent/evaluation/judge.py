@@ -10,8 +10,11 @@ compté à part dans le rapport plutôt que deviné.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
+
+from rag_agent.generation.truncation import shrink_to_budget
 
 FAITHFULNESS_PROMPT = """You are checking an answer produced by a question-answering system.
 
@@ -44,6 +47,15 @@ class TextGenerator(Protocol):
     def generate(self, prompt: str) -> str: ...
 
 
+def _shrink(llm: TextGenerator, build: Callable[[list[str]], str], context: list[str]) -> str:
+    """Prompt réduit au budget de tokens du LLM s'il l'expose"""
+    count_tokens = getattr(llm, "count_tokens", None)
+    budget = getattr(llm, "prompt_budget", None)
+    if count_tokens is None or budget is None:
+        return build(context)
+    return shrink_to_budget(build, context, count_tokens, budget)
+
+
 @dataclass(frozen=True)
 class Verdict:
     label: str | None
@@ -59,14 +71,18 @@ def _verdict(text: str, pattern: re.Pattern[str]) -> Verdict:
 class LLMJudge:
     def __init__(self, llm: TextGenerator, max_context_chars: int = 6000):
         self.llm = llm
-        # Contexte tronqué : il doit tenir dans la fenêtre du modèle juge
+        # Contexte tronqué : il doit tenir dans la fenêtre du modèle juge (au
+        # budget de tokens du LLM s'il l'expose, et à `max_context_chars`)
         self.max_context_chars = max_context_chars
 
     def faithfulness(self, question: str, answer: str, context: list[str]) -> Verdict:
         """supported / unsupported : la réponse s'en tient-elle au contexte ?"""
-        joined = "\n---\n".join(context)[: self.max_context_chars]
-        prompt = FAITHFULNESS_PROMPT.format(context=joined, question=question, answer=answer)
-        return _verdict(self.llm.generate(prompt), _FAITHFULNESS)
+
+        def build(kept: list[str]) -> str:
+            joined = "\n---\n".join(kept)[: self.max_context_chars]
+            return FAITHFULNESS_PROMPT.format(context=joined, question=question, answer=answer)
+
+        return _verdict(self.llm.generate(_shrink(self.llm, build, context)), _FAITHFULNESS)
 
     def correctness(self, question: str, answer: str, reference: str) -> Verdict:
         """correct / partial / incorrect : la réponse rejoint-elle la référence ?"""

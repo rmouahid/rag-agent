@@ -151,3 +151,14 @@ def test_after_reranking_the_lowest_rerank_score_is_dropped_first():
     _, kept, _ = fit_prompt("q", chunks, [], count_words, budget=budget_for("q", chunks[1:]))
 
     assert [c["source"] for c in kept] == ["b.md"]
+
+
+def test_shrink_to_budget_drops_the_last_items_until_the_prompt_fits():
+    from rag_agent.generation.truncation import shrink_to_budget
+
+    def build(items):
+        return " ".join(items)
+
+    assert shrink_to_budget(build, ["a", "b", "c", "d"], count_words, budget=2) == "a b"
+    assert shrink_to_budget(build, ["a", "b"], count_words, budget=10) == "a b"
+    assert shrink_to_budget(build, ["a"], count_words, budget=0) == ""
