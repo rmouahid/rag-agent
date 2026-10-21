@@ -73,6 +73,7 @@ class QuestionResult:
     correctness: str | None = None
     correctness_reason: str = ""
     hallucination_judge: bool | None = None
+    retrieval_only: bool = False
 
 
 def ingest_corpus(agent: RAGAgent, dataset: GoldenDataset) -> int:
@@ -80,6 +81,36 @@ def ingest_corpus(agent: RAGAgent, dataset: GoldenDataset) -> int:
     for path in dataset.corpus_paths:
         agent.ingest(path, source_name=os.path.basename(path))
     return len(agent.retriever.vector_store)
+
+
+def evaluate_retrieval(agent: RAGAgent, question: GoldenQuestion, top_k: int) -> QuestionResult:
+    """
+    Contexte seul, sans générer de réponse : passages attendus retrouvés
+    après réécriture, reranking et filtre de pertinence. Une question est
+    « refusée » quand aucun chunk n'atteint le seuil de pertinence.
+    """
+    start = time.perf_counter()
+    status, chunks = agent.find_context(question.question, top_k=top_k, history=[])
+    seconds = time.perf_counter() - start
+    context = [c["text"] for c in chunks]
+    return QuestionResult(
+        id=question.id,
+        category=question.category,
+        question=question.question,
+        reference_answer=question.reference_answer,
+        answer="",
+        status=status,
+        seconds=seconds,
+        sources=[c["source"] for c in chunks],
+        refused=status != ANSWERED,
+        evidence_recall=evidence_recall(question, context) if question.answerable else 1.0,
+        reciprocal_rank=reciprocal_rank(question, context) if question.answerable else 1.0,
+        lexical_support=1.0,
+        unsupported_numbers=[],
+        reference_overlap=0.0,
+        hallucination_rules=False,
+        retrieval_only=True,
+    )
 
 
 def evaluate_question(agent: RAGAgent, question: GoldenQuestion, top_k: int, judge: LLMJudge | None) -> QuestionResult:
@@ -139,10 +170,14 @@ def evaluate(
     top_k: int = 5,
     judge: LLMJudge | None = None,
     progress: Callable[[int, QuestionResult], None] | None = None,
+    retrieval_only: bool = False,
 ) -> list[QuestionResult]:
     results = []
     for i, question in enumerate(dataset.questions, start=1):
-        result = evaluate_question(agent, question, top_k, judge)
+        if retrieval_only:
+            result = evaluate_retrieval(agent, question, top_k)
+        else:
+            result = evaluate_question(agent, question, top_k, judge)
         results.append(result)
         if progress:
             progress(i, result)
@@ -157,7 +192,8 @@ def summarize(results: list[QuestionResult]) -> dict:
     """
     Agrégats du run. Les taux d'hallucination portent sur toutes les
     questions : une question sans réponse à laquelle le RAG répond quand même
-    compte comme une hallucination.
+    compte comme une hallucination. Un run `retrieval_only` n'a que les
+    sections retrieval, refus (faute de contexte pertinent) et latence.
     """
     answerable = [r for r in results if r.category != "no_answer"]
     unanswerable = [r for r in results if r.category == "no_answer"]
@@ -174,16 +210,18 @@ def summarize(results: list[QuestionResult]) -> dict:
             "correct_refusal_rate": _mean([float(r.refused) for r in unanswerable]),
             "false_refusal_rate": _mean([float(r.refused) for r in answerable]),
         },
-        "rules": {
-            "faithfulness": _mean([r.lexical_support for r in responded if r.category != "no_answer"]),
-            "answer_relevance": _mean([r.reference_overlap for r in answerable]),
-            "hallucination_rate": _mean([float(r.hallucination_rules) for r in results]),
-        },
         "latency_s": {
             "p50": float(np.median([r.seconds for r in results])) if results else None,
             "mean": _mean([r.seconds for r in results]),
         },
     }
+    retrieval_only = any(r.retrieval_only for r in results)
+    if not retrieval_only:
+        summary["rules"] = {
+            "faithfulness": _mean([r.lexical_support for r in responded if r.category != "no_answer"]),
+            "answer_relevance": _mean([r.reference_overlap for r in answerable]),
+            "hallucination_rate": _mean([float(r.hallucination_rules) for r in results]),
+        }
     if judged:
         faithfulness = [r.faithfulness for r in results if r.faithfulness is not None]
         correctness = [r.correctness for r in answerable if r.correctness is not None]
@@ -207,8 +245,14 @@ def summarize(results: list[QuestionResult]) -> dict:
                 "questions": len(group),
                 "evidence_recall": _mean([r.evidence_recall for r in group]) if category != "no_answer" else None,
                 "refusal_rate": _mean([float(r.refused) for r in group]),
-                "answer_relevance": _mean([r.reference_overlap for r in group]) if category != "no_answer" else None,
-                "hallucination_rate_rules": _mean([float(r.hallucination_rules) for r in group]),
+                "answer_relevance": (
+                    _mean([r.reference_overlap for r in group])
+                    if category != "no_answer" and not retrieval_only
+                    else None
+                ),
+                "hallucination_rate_rules": (
+                    None if retrieval_only else _mean([float(r.hallucination_rules) for r in group])
+                ),
                 "hallucination_rate_judge": (
                     _mean([float(bool(r.hallucination_judge)) for r in group])
                     if any(r.hallucination_judge is not None for r in group)
@@ -231,9 +275,13 @@ def run_metadata(dataset: GoldenDataset, label: str, top_k: int, model: str, jud
     }
 
 
-def agent_options(agent: RAGAgent) -> dict:
+def agent_options(agent: RAGAgent, retrieval_only: bool = False) -> dict:
     """Étapes optionnelles du pipeline actives pendant le run"""
-    return {"query_rewriting": agent.query_rewriter is not None}
+    return {
+        "query_rewriting": agent.query_rewriter is not None,
+        "reranking": agent.reranker is not None,
+        "generation": not retrieval_only,
+    }
 
 
 def _pct(value: float | None) -> str:
@@ -266,10 +314,14 @@ def to_markdown(meta: dict, summary: dict, results: list[QuestionResult]) -> str
         f"| MRR | {_num(summary['retrieval']['mrr'])} |",
         f"| Correct refusals (unanswerable questions) | {_pct(summary['refusals']['correct_refusal_rate'])} |",
         f"| False refusals (answerable questions) | {_pct(summary['refusals']['false_refusal_rate'])} |",
-        f"| Faithfulness, rules (lexical support) | {_pct(summary['rules']['faithfulness'])} |",
-        f"| Answer relevance, rules (reference overlap) | {_pct(summary['rules']['answer_relevance'])} |",
-        f"| Hallucination rate, rules | {_pct(summary['rules']['hallucination_rate'])} |",
     ]
+    if "rules" in summary:
+        rules = summary["rules"]
+        lines += [
+            f"| Faithfulness, rules (lexical support) | {_pct(rules['faithfulness'])} |",
+            f"| Answer relevance, rules (reference overlap) | {_pct(rules['answer_relevance'])} |",
+            f"| Hallucination rate, rules | {_pct(rules['hallucination_rate'])} |",
+        ]
     if "judge" in summary:
         judge = summary["judge"]
         lines += [
@@ -297,7 +349,7 @@ def to_markdown(meta: dict, summary: dict, results: list[QuestionResult]) -> str
     lines.append("|---|---|---:|:---:|:---:|---|")
     for r in results:
         judge_flag = "—" if r.hallucination_judge is None else ("yes" if r.hallucination_judge else "no")
-        answer = " ".join(r.answer.split()).replace("|", "\\|")
+        answer = " ".join(r.answer.split()).replace("|", "\\|") or ", ".join(r.sources) or "—"
         answer = answer if len(answer) <= 160 else answer[:157] + "..."
         lines.append(
             f"| {r.id} | {r.category} | {_pct(r.evidence_recall) if r.category != 'no_answer' else '—'} "

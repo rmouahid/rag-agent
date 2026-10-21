@@ -140,3 +140,14 @@ def test_inputs_are_not_mutated():
 def test_overflow_error_reports_the_sizes_and_the_setting_to_change():
     with pytest.raises(ContextOverflowError, match=r"needs \d+ tokens but only 10 .*LLM_CONTEXT_SIZE"):
         fit_prompt("q", [chunk("a.md", 100, 0.9)], [], count_words, budget=10)
+
+
+def test_after_reranking_the_lowest_rerank_score_is_dropped_first():
+    chunks = [
+        {**chunk("a.md", 10, 0.9), "rerank_score": 0.1},
+        {**chunk("b.md", 10, 0.5), "rerank_score": 4.0},
+    ]
+
+    _, kept, _ = fit_prompt("q", chunks, [], count_words, budget=budget_for("q", chunks[1:]))
+
+    assert [c["source"] for c in kept] == ["b.md"]

@@ -23,11 +23,13 @@ class ContextOverflowError(ValueError):
 
 def _least_relevant(chunks: list[dict]) -> int:
     """
-    Index du chunk le moins pertinent ; sans score, l'ordre de retrieval
-    fait foi et c'est le dernier
+    Index du chunk le moins pertinent : selon le cross-encoder si les chunks
+    ont été rerankés, sinon selon le score cosine ; sans score, l'ordre de
+    retrieval fait foi et c'est le dernier
     """
-    if all("score" in c for c in chunks):
-        return min(range(len(chunks)), key=lambda i: (chunks[i]["score"], -i))
+    for key in ("rerank_score", "score"):
+        if all(key in c for c in chunks):
+            return min(range(len(chunks)), key=lambda i: (chunks[i][key], -i))
     return len(chunks) - 1
 
 
