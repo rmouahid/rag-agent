@@ -44,6 +44,36 @@ class Retriever:
         results = self.vector_store.search(query_vector, top_k=top_k)
         return results
 
+    def retrieve_many(self, queries: list[str], top_k: int = 5) -> list[dict]:
+        """
+        Recherche pour plusieurs requêtes (question réécrite ou découpée),
+        fusionnée rang par rang : les meilleurs chunks de chaque requête,
+        puis les deuxièmes, etc., sans doublon et au plus `top_k`. Chaque
+        sous-question garde ainsi ses meilleurs passages, même quand une
+        autre obtient des scores plus élevés. Un chunk trouvé par plusieurs
+        requêtes garde son meilleur score.
+        """
+        if not queries:
+            return []
+        if len(queries) == 1:
+            return self.retrieve(queries[0], top_k=top_k)
+
+        vectors = self.embedder.embed_many(queries)
+        ranked = [self.vector_store.search(v, top_k=top_k) for v in vectors]
+        merged: dict[str, dict] = {}
+        for rank in range(top_k):
+            for results in ranked:
+                if rank >= len(results):
+                    continue
+                chunk = results[rank]
+                kept = merged.get(chunk["id"])
+                if kept is None:
+                    if len(merged) < top_k:
+                        merged[chunk["id"]] = dict(chunk)
+                elif chunk["score"] > kept["score"]:
+                    kept["score"] = chunk["score"]
+        return list(merged.values())
+
     def save(self, path: str | None = None) -> None:
         self.vector_store.save(path)
 

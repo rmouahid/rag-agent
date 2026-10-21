@@ -231,6 +231,11 @@ def run_metadata(dataset: GoldenDataset, label: str, top_k: int, model: str, jud
     }
 
 
+def agent_options(agent: RAGAgent) -> dict:
+    """Étapes optionnelles du pipeline actives pendant le run"""
+    return {"query_rewriting": agent.query_rewriter is not None}
+
+
 def _pct(value: float | None) -> str:
     return "—" if value is None else f"{100 * value:.1f}%"
 
@@ -250,6 +255,8 @@ def to_markdown(meta: dict, summary: dict, results: list[QuestionResult]) -> str
         f"{summary['questions']} questions",
         f"- Model: {meta['model']}; judge: {meta['judge_model'] or 'none (rule-based metrics only)'}",
         f"- top_k = {meta['top_k']}, date {meta['date']}, {meta['machine']}",
+        "- Pipeline: "
+        + (", ".join(f"{k.replace('_', ' ')} {'on' if v else 'off'}" for k, v in meta.get("agent", {}).items()) or "—"),
         "",
         "## Summary",
         "",

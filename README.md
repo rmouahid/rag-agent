@@ -298,6 +298,31 @@ python benchmarks/ivf_benchmark.py --store vector_db   # an existing store
 The plot needs `matplotlib`, which is optional. Without it, only the
 Markdown table is written.
 
+## Retrieval pipeline
+
+By default a question goes straight to the vector search. Optional steps,
+each off by default and switched on in `.env`, trade latency for better
+context:
+
+### Query rewriting
+
+With `QUERY_REWRITING=true`, the local LLM first rewrites the question into
+up to `MAX_REWRITTEN_QUERIES` (default `3`) short search queries: one per
+part of a multi-part question, follow-ups made self-contained from the
+conversation ("and for bikes?"). The original question is always searched
+too, so a poor rewrite can add passages but never lose the ones the question
+found. Results are merged rank by rank (the best chunk of each query, then
+the second ones, ...) so every sub-question keeps its best passages, even
+when another one scores higher. Cost: one extra LLM call per question.
+
+Compare with and without it on the golden dataset:
+
+```bash
+poetry run rag-agent eval --label baseline
+poetry run rag-agent eval --rewrite --label rewrite
+poetry run rag-agent eval --compare eval/runs/*-baseline eval/runs/*-rewrite
+```
+
 ## Roadmap
 
 This project is under active development. The full plan — local LLM migration, IVF/HNSW/PQ vector search, a FastAPI service, an answer-quality evaluation harness, and an agentic retrieval loop — is tracked as [GitHub milestones and issues](../../issues).
