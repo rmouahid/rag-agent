@@ -51,6 +51,8 @@ from rag_agent.vectorstore.pq import PQIndex  # noqa: E402
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "benchmarks")
 METHODS = ("brute-force", "ivf", "hnsw", "pq", "ivf+pq", "faiss-ivf", "faiss-hnsw")
 OWN_METHODS = METHODS[1:5]
+WARMUP = 20  # requêtes non mesurées avant chaque réglage
+PASSES = 2  # passes chronométrées par réglage, la meilleure est gardée
 
 
 def read_fvecs(path: str, limit: int | None = None) -> np.ndarray:
@@ -77,14 +79,25 @@ def hnsw_bytes(index: HNSWIndex) -> int:
 def measure(
     search: Callable[[np.ndarray], np.ndarray], queries: np.ndarray, exact: list[set[int]]
 ) -> tuple[float, float, float]:
-    recalls, times = [], []
-    for q in queries[:5]:  # échauffement non mesuré : caches et allocations des premiers appels
+    """Rappel moyen, puis p50 et p95 en ms de la meilleure de PASSES passes.
+
+    Sur une machine partagée, une passe isolée peut être ralentie par un autre
+    processus : on garde la passe à la médiane la plus basse, qui reflète le
+    coût de l'index plutôt que la charge du moment.
+    """
+    for q in queries[:WARMUP]:  # échauffement non mesuré : caches et allocations des premiers appels
         search(q)
-    for q, truth in zip(queries, exact):
-        ids, elapsed = timed(search, q)
-        recalls.append(len(truth & set(ids.tolist())) / len(truth))
-        times.append(elapsed)
-    return float(np.mean(recalls)), 1000 * float(np.median(times)), 1000 * float(np.percentile(times, 95))
+    recalls, passes = [], []
+    for attempt in range(PASSES):
+        times = []
+        for q, truth in zip(queries, exact):
+            ids, elapsed = timed(search, q)
+            if attempt == 0:
+                recalls.append(len(truth & set(ids.tolist())) / len(truth))
+            times.append(elapsed)
+        passes.append(times)
+    best = min(passes, key=np.median)
+    return float(np.mean(recalls)), 1000 * float(np.median(best)), 1000 * float(np.percentile(best, 95))
 
 
 def run(corpus: np.ndarray, queries: np.ndarray, args) -> list[dict]:
@@ -108,14 +121,10 @@ def run(corpus: np.ndarray, queries: np.ndarray, args) -> list[dict]:
         )
         print(f"  {method:<11} {setting:<22} recall={recall:.3f} p50={p50:.2f} ms", flush=True)
 
-    exact = []
-    times = []
-    cosine_top_k(corpus, queries[0], k)  # échauffement, comme dans measure()
-    for q in queries:
-        (ids, _), elapsed = timed(cosine_top_k, corpus, q, k)
-        exact.append(set(ids.tolist()))
-        times.append(elapsed)
-    row("brute-force", "exact scan", 1.0, 1000 * np.median(times), 1000 * np.percentile(times, 95), vectors_bytes, 0)
+    exact = [set(cosine_top_k(corpus, q, k)[0].tolist()) for q in queries]
+    row(
+        "brute-force", "exact scan", *measure(lambda q: cosine_top_k(corpus, q, k)[0], queries, exact), vectors_bytes, 0
+    )
 
     if "ivf" in args.methods:
         index, build_s = timed(IVFIndex.build, corpus, None, args.seed)
@@ -208,7 +217,8 @@ def to_markdown(rows: list[dict], args, source: str) -> str:
         f"- Data: {source}",
         f"- {args.queries} {'queries of the public query set' if args.fvecs else 'held-out queries'},"
         f" recall@{k} measured against the exact brute-force top-{k}",
-        "- Latency: one query at a time, median (p50) and 95th percentile (p95)",
+        f"- Latency: one query at a time, median (p50) and 95th percentile (p95), after {WARMUP} warm-up"
+        f" queries; best of {PASSES} timed passes",
         "- Memory: bytes needed to answer a query: float32 vectors plus the index structure"
         " (PQ and IVF+PQ keep only their codes, codebooks and lists)",
         f"- Machine: {platform.processor() or platform.machine()}, {os.cpu_count()} CPU, "
