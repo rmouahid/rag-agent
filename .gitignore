@@ -11,3 +11,7 @@ venv/
 vector_db/
 models/
 eval/runs/
+
+# BEIR datasets and cached embeddings (benchmarks/beir_eval.py)
+beir/
+beir_work/
