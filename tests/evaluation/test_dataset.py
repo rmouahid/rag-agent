@@ -9,8 +9,9 @@ from rag_agent.evaluation.dataset import CATEGORIES, DatasetError, load_dataset
 from rag_agent.ingestion.document import Document
 
 # Questions whose evidence is in lumen_miles.md
-MILES = ("q23", "q24", "q27", "q39")
-GOLDEN = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "eval", "golden", "v1")
+MILES = ("q23", "q24", "q27", "q39", "q44", "q45")
+GOLDEN = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "eval", "golden", "v2")
+GOLDEN_V1 = os.path.join(os.path.dirname(GOLDEN), "v1")
 
 
 @pytest.fixture
@@ -35,9 +36,16 @@ def test_golden_dataset_loads_and_is_valid():
     dataset = load_dataset(GOLDEN)
 
     assert dataset.name == "lumen-rail"
+    assert dataset.version == "2.0.0"
+    assert len(dataset.questions) == 50
+    assert all(os.path.isfile(p) for p in dataset.corpus_paths)
+
+
+def test_previous_version_stays_loadable_for_old_runs():
+    dataset = load_dataset(GOLDEN_V1)
+
     assert dataset.version == "1.0.0"
     assert len(dataset.questions) == 40
-    assert all(os.path.isfile(p) for p in dataset.corpus_paths)
 
 
 def test_golden_dataset_covers_every_category():
@@ -45,7 +53,7 @@ def test_golden_dataset_covers_every_category():
 
     counts = {c: len(dataset.by_category(c)) for c in CATEGORIES}
 
-    assert counts == {"factual": 24, "multi_doc": 6, "no_answer": 5, "ambiguous": 5}
+    assert counts == {"factual": 28, "multi_doc": 9, "no_answer": 7, "ambiguous": 6}
 
 
 def test_multi_doc_questions_need_several_documents():

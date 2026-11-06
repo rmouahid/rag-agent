@@ -34,26 +34,28 @@ and are recorded in the report.
 
 ## The golden dataset
 
-`eval/golden/v1/` documents **Lumen Rail**, a fictional regional rail
+`eval/golden/v2/` documents **Lumen Rail**, a fictional regional rail
 operator, in six Markdown files. The facts are invented on purpose: a model
 cannot know them from training, so an answer not taken from the retrieved
 context shows up as a hallucination instead of passing as general knowledge.
 
-`questions.jsonl` holds 40 questions, each with a hand-written reference
+`questions.jsonl` holds 50 questions, each with a hand-written reference
 answer and the exact passages (quotes) that support it:
 
 | Category | Questions | What a good answer does |
 |---|---:|---|
-| `factual` | 24 | gives the fact of one passage |
-| `multi_doc` | 6 | combines passages from several documents |
-| `no_answer` | 5 | says the documents do not contain the answer |
-| `ambiguous` | 5 | covers every reading of the question |
+| `factual` | 28 | gives the fact of one passage |
+| `multi_doc` | 9 | combines passages from several documents |
+| `no_answer` | 7 | says the documents do not contain the answer |
+| `ambiguous` | 6 | covers every reading of the question |
 
 Expected sources are quotes, not chunk ids, so the dataset stays valid
 whatever the chunking or the embedding model. `load_dataset()` checks every
 quote against its document and computes a **fingerprint** of the corpus and
-the questions. Any edit goes into a new version folder (`v2/`): two runs are
+the questions. Any edit goes into a new version folder: two runs are
 comparable only with the same fingerprint, and `--compare` refuses the others.
+`v2/` (the default) adds ten questions to the 40 of `v1/` on the same
+corpus; `v1/` stays for runs made before it (`--dataset eval/golden/v1`).
 
 ## Metrics
 

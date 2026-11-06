@@ -556,7 +556,7 @@ poetry run rag-agent eval --judge --label baseline
 - `ask` streams the answer, then lists its sources. Without relevant
   indexed passages it says so instead of calling the model.
 
-- `eval` asks every question of the golden dataset (`eval/golden/v1/`) and
+- `eval` asks every question of the golden dataset (`eval/golden/v2/`) and
   scores the answers: evidence recall, refusals, faithfulness, relevance
   and hallucination rate, with rules and optionally the LLM as a judge. It
   writes a report per run and compares runs with `--compare`. See

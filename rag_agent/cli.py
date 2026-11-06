@@ -29,7 +29,7 @@ from rag_agent.vectorstore.reranker import CrossEncoderReranker
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.vectorstore.vector_store import VectorStore
 
-DEFAULT_DATASET = os.path.join("eval", "golden", "v1")
+DEFAULT_DATASET = os.path.join("eval", "golden", "v2")
 DEFAULT_RUNS_DIR = os.path.join("eval", "runs")
 
 

@@ -11,7 +11,7 @@ from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.vectorstore.vector_store import VectorStore
 
-DATASET = "eval/golden/v1"
+DATASET = "eval/golden/v2"
 REFUSAL = "The documents do not mention this."
 
 
@@ -143,13 +143,13 @@ def test_a_full_run_is_summarised_reported_and_compared(make_agent, dataset, tmp
     run_dir = harness.write_report(str(tmp_path), meta, summary, results)
 
     assert seen == list(range(1, len(dataset.questions) + 1))
-    assert summary["questions"] == 40
+    assert summary["questions"] == 50
     assert summary["refusals"]["correct_refusal_rate"] == 1.0
     assert summary["judge"]["answer_correctness"] == 1.0
     assert set(summary["by_category"]) == {"factual", "multi_doc", "no_answer", "ambiguous"}
     report = json.loads((tmp_path / os.path.basename(run_dir) / harness.REPORT_JSON).read_text())
     assert report["meta"]["dataset"]["fingerprint"] == dataset.fingerprint
-    assert len(report["results"]) == 40
+    assert len(report["results"]) == 50
     markdown = (tmp_path / os.path.basename(run_dir) / harness.REPORT_MD).read_text()
     assert "# RAG evaluation — baseline" in markdown
     assert "Answer correctness, judge | 100.0%" in markdown
