@@ -144,8 +144,8 @@ def test_eval_writes_a_report_without_touching_the_persisted_store(eval_llm, vec
     assert cli.main(["eval", "--label", "ci", "--output-dir", str(tmp_path / "runs")]) == 0
 
     out = capsys.readouterr().out
-    assert "lumen-rail v1.0.0: 40 questions" in out
-    assert "[40/40] q40" in out
+    assert "lumen-rail v2.0.0: 50 questions" in out
+    assert "[50/50] q50" in out
     (run_dir,) = (tmp_path / "runs").iterdir()
     assert run_dir.name.endswith("-ci")
     assert (run_dir / "report.json").is_file()
