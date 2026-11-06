@@ -42,6 +42,13 @@ ruff = "^0.16.10"
 pre-commit = "^4.6.2"
 mypy = "^2.4.0"
 
+[tool.poetry.group.bench]
+optional = true
+
+[tool.poetry.group.bench.dependencies]
+faiss-cpu = "^1.15.1"
+matplotlib = "^3.11.2"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
