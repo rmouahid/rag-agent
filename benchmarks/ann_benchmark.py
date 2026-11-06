@@ -12,11 +12,19 @@ Pour chaque taille de corpus et chaque réglage, mesure :
 
 Les embeddings viennent d'un VectorStore persisté (`--store`), construit au
 besoin à partir d'un dossier de textes (`--corpus`), comme pour
-ivf_benchmark.py.
+ivf_benchmark.py, ou d'un jeu public au format .fvecs (`--fvecs`, par exemple
+SIFT1M), normalisé L2 pour que la similarité cosinus donne les mêmes voisins
+que la distance euclidienne.
+
+Avec `--faiss` (groupe Poetry optionnel `bench`), FAISS IndexIVFFlat et
+IndexHNSWFlat sont mesurés dans les mêmes conditions (un seul thread, mêmes
+requêtes, mêmes réglages nprobe / ef) comme référence de l'état de l'art.
 
 Usage :
     python benchmarks/ann_benchmark.py --store bench_store --sizes 32000
     python benchmarks/ann_benchmark.py --store big_store --sizes 10000 25000 50000 100000 --name scale
+    python benchmarks/ann_benchmark.py --fvecs sift/sift_base.fvecs sift/sift_query.fvecs \
+        --limit 100000 --faiss --name sift
 
 Écrit docs/benchmarks/<name>.md (défaut : ann.md) et, si matplotlib est
 installé, docs/benchmarks/<name>_recall_latency.png.
@@ -41,7 +49,20 @@ from rag_agent.vectorstore.ivf import IVFIndex  # noqa: E402
 from rag_agent.vectorstore.pq import PQIndex  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "benchmarks")
-METHODS = ("brute-force", "ivf", "hnsw", "pq", "ivf+pq")
+METHODS = ("brute-force", "ivf", "hnsw", "pq", "ivf+pq", "faiss-ivf", "faiss-hnsw")
+OWN_METHODS = METHODS[1:5]
+
+
+def read_fvecs(path: str, limit: int | None = None) -> np.ndarray:
+    """Format .fvecs (TEXMEX) : pour chaque vecteur, sa dimension en int32 puis ses float32"""
+    dim = int(np.fromfile(path, dtype=np.int32, count=1)[0])
+    count = -1 if limit is None else limit * (dim + 1)
+    raw = np.fromfile(path, dtype=np.float32, count=count).reshape(-1, dim + 1)
+    return np.ascontiguousarray(raw[:, 1:])
+
+
+def normalized(vectors: np.ndarray) -> np.ndarray:
+    return (vectors / np.linalg.norm(vectors, axis=1, keepdims=True)).astype(np.float32)
 
 
 def ivf_bytes(index: IVFIndex) -> int:
@@ -57,6 +78,8 @@ def measure(
     search: Callable[[np.ndarray], np.ndarray], queries: np.ndarray, exact: list[set[int]]
 ) -> tuple[float, float, float]:
     recalls, times = [], []
+    for q in queries[:5]:  # échauffement non mesuré : caches et allocations des premiers appels
+        search(q)
     for q, truth in zip(queries, exact):
         ids, elapsed = timed(search, q)
         recalls.append(len(truth & set(ids.tolist())) / len(truth))
@@ -87,6 +110,7 @@ def run(corpus: np.ndarray, queries: np.ndarray, args) -> list[dict]:
 
     exact = []
     times = []
+    cosine_top_k(corpus, queries[0], k)  # échauffement, comme dans measure()
     for q in queries:
         (ids, _), elapsed = timed(cosine_top_k, corpus, q, k)
         exact.append(set(ids.tolist()))
@@ -119,7 +143,44 @@ def run(corpus: np.ndarray, queries: np.ndarray, args) -> list[dict]:
             stats = measure(lambda q, p=nprobe: index.search(q, k, p)[0], queries, exact)
             row("ivf+pq", f"m={m}, nprobe={nprobe}", *stats, index.memory_bytes, build_s)
 
+    if args.faiss:
+        run_faiss(corpus, queries, exact, args, row)
+
     return rows
+
+
+def run_faiss(corpus: np.ndarray, queries: np.ndarray, exact: list[set[int]], args, row) -> None:
+    """FAISS en référence : produit scalaire sur vecteurs normalisés, donc cosinus comme nos index"""
+    import faiss
+
+    faiss.omp_set_num_threads(1)  # comparaison à armes égales avec nos index mono-thread
+    n, dim, k = len(corpus), corpus.shape[1], args.k
+    queries = np.ascontiguousarray(queries, dtype=np.float32)
+
+    def search_with(index):
+        return lambda q: index.search(q[None, :], k)[1][0]
+
+    n_lists = max(1, round(np.sqrt(n)))  # même règle que IVFIndex
+    quantizer = faiss.IndexFlatIP(dim)
+    ivf = faiss.IndexIVFFlat(quantizer, dim, n_lists, faiss.METRIC_INNER_PRODUCT)
+    _, build_s = timed(lambda: (ivf.train(corpus), ivf.add(corpus)))
+    memory = len(faiss.serialize_index(ivf))
+    for nprobe in [p for p in args.nprobe if p <= n_lists]:
+        ivf.nprobe = nprobe
+        row(
+            "faiss-ivf",
+            f"{n_lists} lists, nprobe={nprobe}",
+            *measure(search_with(ivf), queries, exact),
+            memory,
+            build_s,
+        )
+
+    hnsw = faiss.IndexHNSWFlat(dim, 16, faiss.METRIC_INNER_PRODUCT)
+    _, build_s = timed(hnsw.add, corpus)
+    memory = len(faiss.serialize_index(hnsw))
+    for ef in args.ef:
+        hnsw.hnsw.efSearch = ef
+        row("faiss-hnsw", f"M=16, ef={ef}", *measure(search_with(hnsw), queries, exact), memory, build_s)
 
 
 def operating_points(rows: list[dict], target: float) -> list[dict]:
@@ -140,12 +201,13 @@ def mb(n_bytes: float) -> str:
 def to_markdown(rows: list[dict], args, source: str) -> str:
     k = args.k
     lines = [
-        f"# Vector search backends benchmark{' at scale' if args.name != 'ann' else ''}",
+        f"# Vector search backends benchmark{' at scale' if args.name == 'scale' else ''}",
         "",
         "_Generated by `benchmarks/ann_benchmark.py`; do not edit by hand._",
         "",
         f"- Data: {source}",
-        f"- {args.queries} held-out queries, recall@{k} measured against the exact brute-force top-{k}",
+        f"- {args.queries} {'queries of the public query set' if args.fvecs else 'held-out queries'},"
+        f" recall@{k} measured against the exact brute-force top-{k}",
         "- Latency: one query at a time, median (p50) and 95th percentile (p95)",
         "- Memory: bytes needed to answer a query: float32 vectors plus the index structure"
         " (PQ and IVF+PQ keep only their codes, codebooks and lists)",
@@ -200,7 +262,7 @@ def plot(rows: list[dict], k: int, path: str) -> bool:
 
     n = max(r["n"] for r in rows)
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    for method, marker in zip(METHODS, "*osD^"):
+    for method, marker in zip(METHODS, "*osD^xP"):
         points = sorted((r for r in rows if r["n"] == n and r["method"] == method), key=lambda r: r["p50_ms"])
         if points:
             ax.plot(
@@ -208,6 +270,7 @@ def plot(rows: list[dict], k: int, path: str) -> bool:
                 [r["recall"] for r in points],
                 marker=marker,
                 markersize=10 if marker == "*" else 5,
+                linestyle="--" if method.startswith("faiss") else "-",
                 label=method,
             )
     ax.set_xscale("log")
@@ -223,11 +286,16 @@ def plot(rows: list[dict], k: int, path: str) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--store", required=True, help="persisted VectorStore whose embeddings are benchmarked")
+    data = parser.add_mutually_exclusive_group(required=True)
+    data.add_argument("--store", help="persisted VectorStore whose embeddings are benchmarked")
+    data.add_argument("--fvecs", nargs=2, metavar=("BASE", "QUERIES"), help="public .fvecs dataset, e.g. SIFT1M")
     parser.add_argument("--corpus", help="folder of .txt/.md files to embed into --store first (if it does not exist)")
-    parser.add_argument("--limit", type=int, default=32_000, help="max chunks embedded from --corpus")
+    parser.add_argument(
+        "--limit", type=int, default=32_000, help="max chunks embedded from --corpus, or base vectors read from --fvecs"
+    )
     parser.add_argument("--sizes", type=int, nargs="+", help="corpus sizes to benchmark (default: all vectors)")
-    parser.add_argument("--methods", nargs="+", choices=METHODS[1:], default=list(METHODS[1:]))
+    parser.add_argument("--methods", nargs="+", choices=OWN_METHODS, default=list(OWN_METHODS))
+    parser.add_argument("--faiss", action="store_true", help="also measure FAISS IndexIVFFlat and IndexHNSWFlat")
     parser.add_argument("--queries", type=int, default=200)
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--nprobe", type=int, nargs="+", default=[1, 4, 16, 64])
@@ -244,7 +312,15 @@ def main():
     if args.corpus and not os.path.isfile(os.path.join(args.store, "vectors.npy")):
         build_store(args.corpus, args.store, args.limit, args.seed)
 
-    vectors, queries, source = load_store(args.store, args.queries, args.seed)
+    if args.fvecs:
+        vectors = normalized(read_fvecs(args.fvecs[0], args.limit))
+        queries = normalized(read_fvecs(args.fvecs[1], args.queries))
+        source = (
+            f"{len(vectors):,} base vectors of `{os.path.basename(args.fvecs[0])}` and the first {len(queries)}"
+            f" queries of `{os.path.basename(args.fvecs[1])}` ({vectors.shape[1]} dimensions), L2-normalised"
+        )
+    else:
+        vectors, queries, source = load_store(args.store, args.queries, args.seed)
     if args.description:
         source = f"{args.description} ({source})"
     sizes = sorted({min(n, len(vectors)) for n in (args.sizes or [len(vectors)])})
