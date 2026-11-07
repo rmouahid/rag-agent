@@ -40,7 +40,7 @@ def create_app(agent_factory: Callable[[], RAGAgent] = RAGAgent, max_body_bytes:
     app = FastAPI(
         title="RAG Agent",
         description="Retrieval-Augmented Generation over your documents, with a local LLM.",
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
     )
     install_error_handlers(app)
