@@ -1,4 +1,4 @@
-import fitz
+import pymupdf
 import pytest
 
 from rag_agent.ingestion.document import Document
@@ -8,7 +8,7 @@ from rag_agent.ingestion.pdf_loader import PDFLoader
 @pytest.fixture
 def sample_pdf(tmp_path):
     path = tmp_path / "sample.pdf"
-    doc = fitz.open()
+    doc = pymupdf.open()
     page1 = doc.new_page()
     page1.insert_text((72, 72), "First page content.")
     page2 = doc.new_page()

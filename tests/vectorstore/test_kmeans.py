@@ -33,6 +33,25 @@ def test_recovers_well_separated_clusters(init):
     assert result.converged
 
 
+def test_inertia_never_increases_across_iterations():
+    points, _, _ = make_blobs(n_per_cluster=40, centers=[(i * 4, (i % 3) * 4) for i in range(6)], spread=1.5)
+
+    inertias = [kmeans(points, n_clusters=6, max_iter=n, tol=0.0, seed=0).inertia for n in range(1, 15)]
+
+    assert all(later <= earlier + 1e-9 for earlier, later in zip(inertias, inertias[1:]))
+
+
+def test_converged_centroids_are_the_mean_of_their_cluster():
+    points, _, _ = make_blobs(n_per_cluster=60, centers=[(0, 0), (6, 0), (3, 5), (-4, 6)], spread=1.0, seed=2)
+
+    result = kmeans(points, n_clusters=4, tol=1e-9, seed=0)
+
+    assert result.converged
+    assert result.n_iter < 100
+    for cluster, centroid in enumerate(result.centroids):
+        np.testing.assert_allclose(centroid, points[result.labels == cluster].mean(axis=0), atol=1e-6)
+
+
 def test_labels_point_to_the_nearest_centroid():
     points = np.random.default_rng(3).normal(size=(200, 5))
 

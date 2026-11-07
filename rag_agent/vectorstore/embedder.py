@@ -20,7 +20,7 @@ class EmbeddingCache:
     relances ; sans `path`, il reste purement en mémoire.
     """
 
-    def __init__(self, path: str = None):
+    def __init__(self, path: str | None = None):
         self.path = path
         self._vectors: dict[str, np.ndarray] = {}
         if path and os.path.exists(path):
@@ -52,6 +52,7 @@ class EmbeddingCache:
         logger.debug("Cache d'embeddings sauvegardé : %s (%d entrées)", self.path, len(ids))
 
     def _load(self) -> None:
+        assert self.path is not None  # appelé seulement quand le cache est activé
         try:
             with np.load(self.path, allow_pickle=False) as data:
                 self._vectors = dict(zip(data["ids"].tolist(), data["vectors"]))
@@ -63,7 +64,7 @@ class EmbeddingCache:
 
 
 class Embedder:
-    def __init__(self, model_name: str = None, cache_dir: str = None):
+    def __init__(self, model_name: str | None = None, cache_dir: str | None = None):
         """
         model_name : modèle sentence-transformers à charger.
         Par défaut, lu depuis la config (EMBEDDING_MODEL).
@@ -108,9 +109,9 @@ class Embedder:
         Les chunks partageant un même id ne sont encodés qu'une fois.
         """
         if not chunks:
-            return np.empty((0, self.model.get_sentence_embedding_dimension()), dtype=np.float32)
+            return np.empty((0, self.model.get_sentence_embedding_dimension() or 0), dtype=np.float32)
 
-        missing = {}
+        missing: dict[str, str] = {}
         for chunk in chunks:
             if chunk.id not in self.cache:
                 missing.setdefault(chunk.id, chunk.text)

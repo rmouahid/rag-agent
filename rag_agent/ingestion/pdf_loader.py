@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+import pymupdf
 
 from rag_agent.ingestion.document import Document
 from rag_agent.logging_config import get_logger
@@ -17,8 +17,8 @@ class PDFLoader:
     """
 
     def load(self, path: str) -> Document:
-        doc = fitz.open(path)
-        pages_text = [page.get_text() for page in doc]
+        doc = pymupdf.open(path)
+        pages_text = [page.get_text() for page in doc.pages()]
         text = "".join(pages_text)
 
         logger.info("PDF chargé : %s (%d pages)", path, len(doc))

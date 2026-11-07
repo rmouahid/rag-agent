@@ -5,6 +5,7 @@ import pytest
 
 from rag_agent.chunking.chunk import Chunk
 from rag_agent.ingestion.document import Document
+from rag_agent.vectorstore import embedder as embedder_module
 from rag_agent.vectorstore import retriever as retriever_module
 from rag_agent.vectorstore.retriever import Retriever
 from rag_agent.vectorstore.vector_store import VectorStore
@@ -13,10 +14,7 @@ DIM = 4
 
 
 def make_chunks(*texts, source="doc.md", metadata=None):
-    return [
-        Chunk(text=t, source=source, position=i * 100, metadata=dict(metadata or {}))
-        for i, t in enumerate(texts)
-    ]
+    return [Chunk(text=t, source=source, position=i * 100, metadata=dict(metadata or {})) for i, t in enumerate(texts)]
 
 
 def make_vectors(n, offset=0):
@@ -150,18 +148,47 @@ def test_retriever_reuses_persisted_embeddings_across_restarts(tmp_path, monkeyp
         embedding_cache_dir="",
     )
     monkeypatch.setattr(retriever_module, "config", cfg)
+    # Embedder reads its own module's config: without this, the fake
+    # vectors would be written to the real embedding cache.
+    monkeypatch.setattr(embedder_module, "config", cfg)
     doc = Document(text="Paris is the capital of France. " * 30, source="france.md", metadata={"type": "markdown"})
 
     first_run = Retriever(chunk_size=200, overlap=20, chunking_strategy="fixed")
-    first_run.ingest(doc)
+    ids = first_run.ingest(doc)
     indexed = len(first_run.vector_store)
     assert indexed > 0
+    assert ids == [c["id"] for c in first_run.vector_store.chunks]
 
     second_run = Retriever(chunk_size=200, overlap=20, chunking_strategy="fixed")
     assert len(second_run.vector_store) == indexed
     assert second_run.embedder.model.encoded == []  # nothing recomputed on startup
 
-    second_run.ingest(doc)  # re-ingesting the same source is a no-op
+    assert second_run.ingest(doc) == []  # re-ingesting the same source is a no-op
     assert second_run.embedder.model.encoded == []
     assert len(second_run.vector_store) == indexed
     assert second_run.retrieve("capital of France", top_k=1)[0]["source"] == "france.md"
+
+
+def test_an_empty_store_is_ready():
+    assert VectorStore().is_ready
+
+
+def test_a_store_with_one_vector_per_chunk_is_ready():
+    store = VectorStore()
+    store.add(make_chunks("a", "b"), make_vectors(2))
+    assert store.is_ready
+
+
+def test_a_store_whose_vectors_and_chunks_disagree_is_not_ready():
+    store = VectorStore()
+    store.add(make_chunks("a", "b"), make_vectors(2))
+    store.chunks.append({"id": "orphan", "text": "c", "source": "doc.md", "metadata": {}})
+    assert not store.is_ready
+
+
+def test_an_ivf_store_without_its_index_is_not_ready():
+    store = VectorStore(index_type="ivf", ivf_min_vectors=0)
+    store.add(make_chunks("a", "b", "c"), make_vectors(3))
+    assert store.is_ready
+    store.index = None
+    assert not store.is_ready

@@ -17,12 +17,10 @@ class Chunk:
     metadata: dict = field(default_factory=dict)
     id: str = field(default="")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.id:
             self.id = self._compute_id()
 
     def _compute_id(self) -> str:
-        digest = hashlib.sha256(
-            f"{self.source}:{self.position}:{self.text}".encode("utf-8")
-        )
+        digest = hashlib.sha256(f"{self.source}:{self.position}:{self.text}".encode())
         return digest.hexdigest()[:16]

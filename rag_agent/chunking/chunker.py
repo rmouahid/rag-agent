@@ -10,7 +10,7 @@ class FixedSizeChunker:
     `chunk_size` caractères.
     """
 
-    def __init__(self, chunk_size: int = None, overlap: int = None):
+    def __init__(self, chunk_size: int | None = None, overlap: int | None = None):
         self.chunk_size = chunk_size if chunk_size is not None else config.chunk_size
         self.overlap = overlap if overlap is not None else config.chunk_overlap
 

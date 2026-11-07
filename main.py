@@ -1,11 +1,20 @@
+import sys
+
+from rag_agent.generation.llm import ModelNotFoundError
 from rag_agent.generation.rag_agent import RAGAgent
+from rag_agent.generation.truncation import ContextOverflowError
+
 
 def main():
     print("=" * 50)
-    print("  RAG Agent — powered by Groq + LLaMA 3.3")
+    print("  RAG Agent — powered by a local LLM (llama.cpp)")
     print("=" * 50)
 
-    agent = RAGAgent()
+    try:
+        agent = RAGAgent()
+    except ModelNotFoundError as e:
+        print(f"\n{e}")
+        sys.exit(1)
 
     # --- INGESTION ---
     print("\n INGESTION DES SOURCES")
@@ -36,9 +45,20 @@ def main():
         if not question:
             continue
 
-        answer = agent.ask(question)
-        print(f"\n Réponse :\n{answer}\n")
+        try:
+            answer = agent.ask_stream(question)
+        except ContextOverflowError as e:
+            print(f" Erreur : {e}")
+            continue
+
+        print("\n Réponse :")
+        for piece in answer:
+            print(piece, end="", flush=True)
+        print("\n")
+        if answer.sources:
+            print(f" Sources :\n{answer.format_sources()}\n")
         print("-" * 50)
+
 
 if __name__ == "__main__":
     main()
