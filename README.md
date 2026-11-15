@@ -120,17 +120,20 @@ described in the [guide](docs/guide.md#vector-search).
 
 **Generated-answer quality, measured separately from retrieval** (Lumen Rail
 v2, six fictional documents, 19 chunks, 50 questions; TinyLlama 1.1B Chat
-Q4_K_M, top 5, no rewriting/reranking/agentic loop):
+Q4_K_M, top 5, no rewriting/reranking):
 
-| Faithfulness, lexical rules | Answer relevance, lexical rules | Hallucination flags, rules | Correct refusals |
-|---:|---:|---:|---:|
-| 28.1% | 23.9% | 92.0% | 0 / 7 unanswerable questions |
+| Mode | Faithfulness, lexical rules | Answer relevance, lexical rules | Hallucination flags, rules | Correct refusals |
+|---|---:|---:|---:|---:|
+| Baseline | 28.1% | 23.9% | 92.0% | 0 / 7 unanswerable questions |
+| Agentic enabled | 25.8% | 24.0% | 94.0% | 0 / 7 unanswerable questions |
 
 This is a **negative result for this small model**, despite 96.1% evidence
 recall. The rules are imperfect lexical proxies, not a judge of factual
 correctness. These figures do not measure the default Llama 3.2 3B model.
 The [full report and reproduction details](docs/benchmarks/golden_answers.md)
-include all 50 answers, settings and limitations.
+include all 100 answers, settings and limitations. In this run the loop
+triggered no additional search; measured median latency rose from 19.9 to
+44.8 seconds without a quality improvement.
 
 ## Technical choices and limits
 

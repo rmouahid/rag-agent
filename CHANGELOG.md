@@ -6,6 +6,20 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Recorded CLI ingestion and generated-answer transcript with sources and a
+  script to reproduce the visual demo (#58).
+- Answer-quality results for a real TinyLlama run on all 50 Lumen Rail v2
+  questions, with per-question data and explicit model/runtime limitations
+  (#81).
+- Measured before/after the agentic loop on the same 50 questions: no
+  additional retrieval or observed quality improvement on TinyLlama, with
+  both raw reports and latency costs published (#82).
+- Full-pipeline load measurement runner with p50/p95 latency, peak resident
+  memory, per-file provenance and a required post-deduplication corpus size.
+  The 200k-chunk production-scale run is still pending (#83).
+
 ## [0.2.0] — 2026-11-07
 
 ### Added
