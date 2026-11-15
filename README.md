@@ -25,7 +25,6 @@ is shown unedited, including its language choice. It is an interface demo,
 not an answer-quality benchmark. To record another run with your configured
 model: `poetry run python -m benchmarks.cli_demo`.*
 
-
 ```mermaid
 flowchart LR
     subgraph ingest [Ingestion]
@@ -118,6 +117,20 @@ poetry run rag-agent eval --retrieval-only [--rerank]
 
 Dataset downloads and the other benchmarks (IVF alone, scale study) are
 described in the [guide](docs/guide.md#vector-search).
+
+**Generated-answer quality, measured separately from retrieval** (Lumen Rail
+v2, six fictional documents, 19 chunks, 50 questions; TinyLlama 1.1B Chat
+Q4_K_M, top 5, no rewriting/reranking/agentic loop):
+
+| Faithfulness, lexical rules | Answer relevance, lexical rules | Hallucination flags, rules | Correct refusals |
+|---:|---:|---:|---:|
+| 28.1% | 23.9% | 92.0% | 0 / 7 unanswerable questions |
+
+This is a **negative result for this small model**, despite 96.1% evidence
+recall. The rules are imperfect lexical proxies, not a judge of factual
+correctness. These figures do not measure the default Llama 3.2 3B model.
+The [full report and reproduction details](docs/benchmarks/golden_answers.md)
+include all 50 answers, settings and limitations.
 
 ## Technical choices and limits
 
