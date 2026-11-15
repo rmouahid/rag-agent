@@ -34,6 +34,40 @@ paraphrases and language changes; a flag is not a proved hallucination.
 There is no judge run in these results. Do not read 28.1% as the share of
 factually correct answers, or extrapolate the result to other models.
 
+## Before/after the agentic loop
+
+The second run uses the same dataset fingerprint, question order, model,
+top-k and configuration; only the agentic flag is enabled. All 50 questions
+completed. The [complete agentic report](runs/tinyllama-agentic.json) records
+its answers and search queries.
+
+| Metric | Baseline | Agentic enabled |
+|---|---:|---:|
+| Evidence recall | 96.1% | 96.1% |
+| MRR | 0.833 | 0.833 |
+| Faithfulness, lexical rules | 28.1% | 25.8% |
+| Answer relevance, lexical rules | 23.9% | 24.0% |
+| Hallucination flags, rules | 92.0% | 94.0% |
+| Correct refusal on unanswerable questions | 0 / 7 | 0 / 7 |
+| Searches per question | 1.00 | 1.00 |
+| Median full-answer latency | 19.9 s | 44.8 s |
+| Mean full-answer latency | 24.1 s | 50.0 s |
+
+**No question triggered a second search.** On this model and dataset the
+loop added a context-sufficiency generation without retrieving more evidence.
+The measured median latency is about 2.25 times the baseline, with no
+observed improvement in these quality proxies. This run does not establish
+that the loop is useful; it also does not establish that it cannot help on
+other models or harder corpora.
+
+Small differences in lexical scores are not evidence of a meaningful quality
+change: these are single runs on 50 questions, without a separate judge,
+confidence intervals or repeated generations. The harness records search
+queries but does not retain the sufficiency judge's raw decision, so a stop
+cannot be attributed to a correctly recognised sufficient context versus
+an unparseable decision from this report alone. That distinction needs a
+follow-up diagnostic before changing the decision policy.
+
 ## Runtime and reproduction
 
 - GGUF SHA-256:
@@ -58,6 +92,5 @@ poetry run rag-agent eval --label tinyllama-baseline
 poetry run rag-agent eval --agentic --label tinyllama-agentic
 ```
 
-The agentic comparison is reported separately after its full 50-question
-run has finished. A smoke run or an unfinished log is not a comparison.
-This corpus is small: the figures do not satisfy the 200k-chunk load test.
+Both reports cover all 50 questions. This corpus is small: the figures do
+not satisfy the 200k-chunk load test.
