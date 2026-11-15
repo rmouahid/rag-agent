@@ -1,0 +1,9 @@
+$ rag-agent ingest tests/fixtures/knowledge.md
+tests/fixtures/knowledge.md: 4 chunks indexed (0 duplicates skipped)
+4 chunks in /home/cytech/issue-work/rag-demo-index
+
+$ rag-agent ask "Who created Python and when was it first released?"
+La syntaxe Python est créée par Guido van Rossum en 1991. La première version du langage est compilée à l'aide d'un interpréteur Python, CPython.
+
+Sources:
+[1] tests/fixtures/knowledge.md — e. A strong colony can store more than 25 kilograms of honey for the winter. Python programming language Python is a general-purpose programming language created by Guido van Rossum and first…

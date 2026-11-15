@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="376" viewBox="0 0 1120 376" role="img" aria-labelledby="title desc">
+<title id="title">RAG Agent: real CLI ingestion and query</title>
+<desc id="desc">Recorded stdout rendered as a terminal transcript. No answers are mocked or edited.</desc>
+<rect width="1120" height="376" rx="12" fill="#0d1117"/>
+<g fill="#8b949e" font-family="monospace" font-size="15"><text x="24" y="34">RAG Agent · recorded CLI output</text></g>
+<g font-family="DejaVu Sans Mono, monospace" font-size="17" xml:space="preserve">
+<text x="24" y="85" fill="#8ce99a">$ rag-agent ingest tests/fixtures/knowledge.md</text>
+<text x="24" y="108" fill="#e6edf3">tests/fixtures/knowledge.md: 4 chunks indexed (0 duplicates skipped)</text>
+<text x="24" y="131" fill="#e6edf3">4 chunks in /home/cytech/issue-work/rag-demo-index</text>
+<text x="24" y="154" fill="#e6edf3"></text>
+<text x="24" y="177" fill="#8ce99a">$ rag-agent ask &quot;Who created Python and when was it first released?&quot;</text>
+<text x="24" y="200" fill="#e6edf3">La syntaxe Python est créée par Guido van Rossum en 1991. La première version du langage est</text>
+<text x="24" y="223" fill="#e6edf3">compilée à l&#x27;aide d&#x27;un interpréteur Python, CPython.</text>
+<text x="24" y="246" fill="#e6edf3"></text>
+<text x="24" y="269" fill="#e6edf3">Sources:</text>
+<text x="24" y="292" fill="#e6edf3">[1] tests/fixtures/knowledge.md — e. A strong colony can store more than 25 kilograms of honey for</text>
+<text x="24" y="315" fill="#e6edf3">the winter. Python programming language Python is a general-purpose programming language created by</text>
+<text x="24" y="338" fill="#e6edf3">Guido van Rossum and first…</text>
+</g></svg>
