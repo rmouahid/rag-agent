@@ -1,7 +1,10 @@
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
 
 from rag_agent.api.app import create_app
+from rag_agent.pipeline import IngestionPipeline
 
 
 class FakeVectorStore:
@@ -24,6 +27,7 @@ class FakeAgent:
     """Stand-in for RAGAgent: no model weights, no embedding model."""
 
     def __init__(self):
+        self.pipeline = Mock(spec=IngestionPipeline)
         self.llm = FakeLLM()
         self.retriever = FakeRetriever()
 

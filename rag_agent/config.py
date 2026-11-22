@@ -38,6 +38,8 @@ class Config:
     hnsw_ef_search: int = int(os.getenv("HNSW_EF_SEARCH", "64"))
     ivf_rebuild_threshold: float = float(os.getenv("IVF_REBUILD_THRESHOLD", "0.2"))
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "20"))
+    max_page_mb: int = int(os.getenv("MAX_PAGE_MB", "10"))
+    page_timeout_seconds: float = float(os.getenv("PAGE_TIMEOUT_SECONDS", "10"))
     allow_private_urls: bool = os.getenv("ALLOW_PRIVATE_URLS", "false").lower() in ("1", "true", "yes")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

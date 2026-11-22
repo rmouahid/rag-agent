@@ -706,13 +706,21 @@ curl -F url=https://example.com/article http://127.0.0.1:8000/documents
 Passages already indexed are skipped, so re-sending a source returns
 `chunks_created: 0`. An unsupported file type or a non-HTML page returns
 `415`, an unreachable URL `502`, and sending both or neither of `file` and
-`url` returns `422`. Ingestions run one at a time.
+`url` returns `422`. Deduplication, embedding and indexing share the agent
+lock with queries. URL download, HTML extraction and chunking run outside
+that lock.
 
 URLs are fetched by the server, so they are checked first: a host that
 resolves to a loopback, private, link-local or reserved address (localhost,
 `192.168.x.x`, the cloud metadata endpoint...) is refused with `400`, and
 every redirect is checked the same way. Set `ALLOW_PRIVATE_URLS=true` to
 ingest pages from your own network.
+
+Remote HTML is downloaded in a stream capped at `MAX_PAGE_MB` (default
+10 MiB), including when the server omits `Content-Length`. A single
+`PAGE_TIMEOUT_SECONDS` deadline (default 10 seconds) covers the download
+and all redirects. The loader requests an uncompressed response and
+rejects other content encodings.
 
 Request bodies are capped at `MAX_UPLOAD_MB` (default 20 MB): a larger
 upload is refused with `413` as soon as its `Content-Length` announces it,
@@ -737,6 +745,7 @@ server logs:
 | 400 | `blocked_url` | The URL resolves to a non-public address |
 | 404 / 405 | `not_found` / `method_not_allowed` | Unknown route or method |
 | 413 | `payload_too_large` | Request body over `MAX_UPLOAD_MB` (default 20) |
+| 413 | `page_too_large` | Remote response over `MAX_PAGE_MB` |
 | 415 | `unsupported_source` | Unsupported file type, non-http(s) URL or non-HTML page |
 | 422 | `validation_error` | Malformed body; `detail` lists `{field, message, type}` per rejected field |
 | 422 | `invalid_source` | Both or neither of `file` and `url` |
@@ -744,7 +753,7 @@ server logs:
 | 422 | `context_overflow` | The question and history do not fit in the model context |
 | 500 | `ingestion_failed` / `generation_failed` | Indexing or the model failed |
 | 500 | `internal_error` | Any other unexpected error |
-| 502 | `source_unreachable` | The URL could not be fetched |
+| 502 | `source_unreachable` | The URL could not be fetched, or the download deadline expired |
 
 Routes live in `rag_agent/api/routers/` and receive the agent, vector store
 or LLM through the dependencies in `rag_agent/api/dependencies.py`; tests

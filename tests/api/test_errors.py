@@ -68,10 +68,7 @@ def test_ingestion_failure_hides_the_traceback(lenient_client, agent):
 
 
 def test_ingestion_failure_of_a_url(lenient_client, agent):
-    def ingest(source, source_name=None):
-        raise KeyError("text")
-
-    agent.ingest = ingest
+    agent.pipeline.ingest.side_effect = KeyError("text")
 
     assert_envelope(lenient_client.post("/documents", data={"url": "https://example.com"}), 500, "ingestion_failed")
 
@@ -124,7 +121,7 @@ def test_prompt_overflow_has_its_own_code(client, agent):
 def test_error_responses_are_documented(client):
     paths = client.get("/openapi.json").json()["paths"]
 
-    for path, codes in {"/ask": ["422", "500"], "/documents": ["400", "415", "422", "500", "502"]}.items():
+    for path, codes in {"/ask": ["422", "500"], "/documents": ["400", "413", "415", "422", "500", "502"]}.items():
         responses = paths[path]["post"]["responses"]
         for code in codes:
             assert responses[code]["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorResponse")

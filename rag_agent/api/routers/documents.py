@@ -10,6 +10,7 @@ from rag_agent.api.errors import APIError, error_responses
 from rag_agent.api.schemas import IngestResponse
 from rag_agent.generation.rag_agent import RAGAgent
 from rag_agent.ingestion.url_guard import BlockedURLError
+from rag_agent.ingestion.web_loader import PageTooLargeError
 from rag_agent.logging_config import get_logger
 from rag_agent.pipeline import UnsupportedSourceError, source_type
 
@@ -73,12 +74,13 @@ def _ingest_url(agent: RAGAgent, url: str) -> list[str]:
     try:
         if source_type(url) != "web":
             raise UnsupportedSourceError(f"Unsupported URL {url!r}: expected an http(s) URL")
-        with agent_lock:
-            return agent.ingest(url)
+        return agent.pipeline.ingest(url, index_lock=agent_lock).chunk_ids
     except UnsupportedSourceError as e:
         raise _unsupported(e) from e
     except BlockedURLError as e:
         raise APIError(status.HTTP_400_BAD_REQUEST, "blocked_url", str(e)) from e
+    except PageTooLargeError as e:
+        raise APIError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "page_too_large", str(e)) from e
     except ConnectionError as e:
         raise APIError(status.HTTP_502_BAD_GATEWAY, "source_unreachable", str(e)) from e
     except ValueError as e:
@@ -92,7 +94,7 @@ def _ingest_url(agent: RAGAgent, url: str) -> list[str]:
     "/documents",
     response_model=IngestResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=error_responses(400, 415, 422, 500, 502),
+    responses=error_responses(400, 413, 415, 422, 500, 502),
 )
 def ingest_document(
     file: UploadFile | None = File(None, description="PDF or Markdown file"),
