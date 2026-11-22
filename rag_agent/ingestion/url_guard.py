@@ -4,7 +4,7 @@ lire au serveur une ressource interne (localhost, réseau privé, endpoint
 de métadonnées cloud 169.254.169.254...) dont le contenu serait ensuite
 indexé puis restitué dans les réponses.
 
-Limite connue : l'hôte est résolu ici puis de nouveau par `requests` ; un
+Limite connue : l'hôte est résolu ici puis de nouveau par le client HTTP ; un
 DNS malveillant pourrait répondre différemment entre les deux (DNS
 rebinding). Le contrôle de chaque redirection ferme le cas le plus courant.
 """

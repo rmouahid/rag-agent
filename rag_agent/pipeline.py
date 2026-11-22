@@ -8,8 +8,10 @@ Le RAGAgent en possède un, partagé avec son Retriever ; la CLI et l'API
 ingèrent toutes deux par lui.
 """
 
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 
+from rag_agent.chunking.chunk import Chunk
 from rag_agent.chunking.chunker import FixedSizeChunker
 from rag_agent.chunking.dedup import ShingleIndex, deduplicate_chunks
 from rag_agent.chunking.sentence_chunker import SentenceChunker
@@ -82,18 +84,21 @@ class IngestionPipeline:
         self._dedup_index: ShingleIndex | None = None
         self._dedup_last_id: str | None = None
 
-    def ingest(self, source: str, source_name: str | None = None) -> IngestionResult:
+    def ingest(
+        self, source: str, source_name: str | None = None, *, index_lock: AbstractContextManager[object] | None = None
+    ) -> IngestionResult:
         """
         Charge `source` (fichier PDF/Markdown ou URL) avec le loader de son
         type, puis l'indexe. `source_name` remplace la source enregistrée
         avec les chunks — pour un fichier reçu par l'API, stocké sous un nom
-        temporaire.
+        temporaire. `index_lock` protège la déduplication et l’écriture
+        dans le store partagé.
         """
         loader = self.loaders[source_type(source)]
         document = loader.load(source)
         if source_name:
             document.source = source_name
-        return self.ingest_document(document)
+        return self.ingest_document(document, index_lock=index_lock)
 
     def _current_dedup_index(self) -> ShingleIndex:
         """
@@ -109,7 +114,9 @@ class IngestionPipeline:
         assert index is not None
         return index
 
-    def ingest_document(self, document: Document) -> IngestionResult:
+    def ingest_document(
+        self, document: Document, *, index_lock: AbstractContextManager[object] | None = None
+    ) -> IngestionResult:
         """
         Document déjà chargé → chunks → déduplication → embeddings → vector store
         """
@@ -119,6 +126,11 @@ class IngestionPipeline:
         result = IngestionResult(source=document.source, chunks_total=len(chunks))
         logger.debug("%d chunks créés", len(chunks))
 
+        with index_lock if index_lock is not None else nullcontext():
+            self._index_chunks(chunks, result)
+        return result
+
+    def _index_chunks(self, chunks: list[Chunk], result: IngestionResult) -> None:
         # Déduplique contre le batch courant et le corpus déjà indexé
         # (ré-ingestion de la même source, ou sources qui se chevauchent)
         existing_texts = [c["text"] for c in self.vector_store.chunks]
@@ -126,7 +138,7 @@ class IngestionPipeline:
         logger.debug("%d chunks après déduplication", len(chunks))
         if not chunks:
             logger.info("Aucun chunk nouveau après déduplication")
-            return result
+            return
 
         try:
             embeddings = self.embedder.embed_chunks(chunks)
@@ -138,4 +150,3 @@ class IngestionPipeline:
         self._dedup_last_id = self.vector_store.chunks[-1]["id"] if self.vector_store.chunks else None
         result.chunk_ids = [c.id for c in chunks]
         logger.info("%d chunks indexés (%d doublons écartés)", result.chunks_indexed, result.duplicates)
-        return result

@@ -1,12 +1,12 @@
-from unittest.mock import MagicMock, patch
+from functools import partial
 
+import httpx
 import pytest
-import requests
 
-from rag_agent.ingestion import url_guard
+from rag_agent.ingestion import url_guard, web_loader
 from rag_agent.ingestion.document import Document
 from rag_agent.ingestion.url_guard import BlockedURLError
-from rag_agent.ingestion.web_loader import MAX_REDIRECTS, WebLoader
+from rag_agent.ingestion.web_loader import MAX_REDIRECTS, PageTooLargeError, WebLoader
 
 SAMPLE_HTML = """
 <html><head><title>t</title><script>bad()</script></head>
@@ -31,25 +31,43 @@ def fake_dns(monkeypatch):
     monkeypatch.setattr(url_guard.socket, "getaddrinfo", getaddrinfo)
 
 
-def _mock_response(text=None, content_type="text/html; charset=utf-8"):
-    response = MagicMock()
-    response.text = text
-    response.headers = {"Content-Type": content_type}
-    response.is_redirect = False
-    response.raise_for_status = MagicMock()
-    return response
+class HTMLStream(httpx.AsyncByteStream):
+    async def __aiter__(self):
+        yield SAMPLE_HTML.encode()
+
+
+def _html():
+    return httpx.Response(200, headers={"Content-Type": "text/html; charset=utf-8"}, stream=HTMLStream())
 
 
 def _redirect(location):
-    response = MagicMock()
-    response.headers = {"Location": location}
-    response.is_redirect = True
-    return response
+    return httpx.Response(302, headers={"Location": location})
 
 
-def test_load_returns_document_with_main_content_only():
-    with patch("requests.get", return_value=_mock_response(SAMPLE_HTML)):
-        result = WebLoader().load("http://example.com/article")
+@pytest.fixture
+def mock_http(monkeypatch):
+    def install(*responses):
+        calls = []
+        replies = iter(responses)
+
+        async def handle(request):
+            calls.append(str(request.url))
+            response = next(replies)
+            if isinstance(response, Exception):
+                raise response
+            assert request.headers["Accept-Encoding"] == "identity"
+            return response
+
+        client = partial(httpx.AsyncClient, transport=httpx.MockTransport(handle))
+        monkeypatch.setattr(web_loader.httpx, "AsyncClient", client)
+        return calls
+
+    return install
+
+
+def test_load_returns_document_with_main_content_only(mock_http):
+    mock_http(_html())
+    result = WebLoader().load("http://example.com/article")
 
     assert isinstance(result, Document)
     assert result.source == "http://example.com/article"
@@ -59,55 +77,66 @@ def test_load_returns_document_with_main_content_only():
     assert "Footer stuff" not in result.text
 
 
-def test_non_html_content_type_raises():
-    with patch("requests.get", return_value=_mock_response(content_type="application/pdf")):
-        with pytest.raises(ValueError):
-            WebLoader().load("http://example.com/file.pdf")
+def test_non_html_content_type_raises(mock_http):
+    mock_http(httpx.Response(200, headers={"Content-Type": "application/pdf"}))
+
+    with pytest.raises(ValueError):
+        WebLoader().load("http://example.com/file.pdf")
 
 
-def test_request_failure_raises_connection_error():
-    with patch("requests.get", side_effect=requests.exceptions.Timeout("timed out")):
-        with pytest.raises(ConnectionError):
-            WebLoader().load("http://example.com/timeout")
+def test_request_failure_raises_connection_error(mock_http):
+    mock_http(httpx.ReadTimeout("timed out"))
+
+    with pytest.raises(ConnectionError):
+        WebLoader().load("http://example.com/timeout")
 
 
-def test_private_host_is_refused_before_any_request():
-    with patch("requests.get") as get:
-        with pytest.raises(BlockedURLError):
-            WebLoader(allow_private_hosts=False).load("http://localhost:8000/admin")
+def test_private_host_is_refused_before_any_request(mock_http):
+    calls = mock_http()
 
-    get.assert_not_called()
+    with pytest.raises(BlockedURLError):
+        WebLoader(allow_private_hosts=False).load("http://localhost:8000/admin")
 
-
-def test_redirect_to_a_private_host_is_refused():
-    with patch("requests.get", return_value=_redirect("http://metadata.internal/latest/meta-data/")) as get:
-        with pytest.raises(BlockedURLError):
-            WebLoader(allow_private_hosts=False).load("http://example.com/innocent")
-
-    assert get.call_count == 1  # the private hop is never requested
+    assert calls == []
 
 
-def test_redirects_are_followed_manually_and_relative_locations_resolved():
-    responses = [_redirect("/moved"), _mock_response(SAMPLE_HTML)]
+def test_redirect_to_a_private_host_is_refused(mock_http):
+    calls = mock_http(_redirect("http://metadata.internal/latest/meta-data/"))
 
-    with patch("requests.get", side_effect=responses) as get:
-        result = WebLoader(allow_private_hosts=False).load("http://example.com/old")
+    with pytest.raises(BlockedURLError):
+        WebLoader(allow_private_hosts=False).load("http://example.com/innocent")
 
-    assert [c.args[0] for c in get.call_args_list] == ["http://example.com/old", "http://example.com/moved"]
-    assert all(c.kwargs["allow_redirects"] is False for c in get.call_args_list)
+    assert calls == ["http://example.com/innocent"]
+
+
+def test_redirects_are_followed_manually_and_relative_locations_resolved(mock_http):
+    calls = mock_http(_redirect("/moved"), _html())
+
+    result = WebLoader(allow_private_hosts=False).load("http://example.com/old")
+
+    assert calls == ["http://example.com/old", "http://example.com/moved"]
     assert "Real article content." in result.text
 
 
-def test_redirect_loops_are_cut():
-    with patch("requests.get", return_value=_redirect("http://example.com/loop")) as get:
-        with pytest.raises(ConnectionError):
-            WebLoader(allow_private_hosts=False).load("http://example.com/loop")
+def test_redirect_loops_are_cut(mock_http):
+    calls = mock_http(*[_redirect("/loop") for _ in range(MAX_REDIRECTS + 1)])
 
-    assert get.call_count == MAX_REDIRECTS + 1
+    with pytest.raises(ConnectionError):
+        WebLoader(allow_private_hosts=False).load("http://example.com/loop")
+
+    assert len(calls) == MAX_REDIRECTS + 1
 
 
-def test_private_hosts_can_be_allowed_explicitly():
-    with patch("requests.get", return_value=_mock_response(SAMPLE_HTML)):
-        result = WebLoader(allow_private_hosts=True).load("http://localhost:8000/wiki")
+def test_private_hosts_can_be_allowed_explicitly(mock_http):
+    mock_http(_html())
+
+    result = WebLoader(allow_private_hosts=True).load("http://localhost:8000/wiki")
 
     assert "Real article content." in result.text
+
+
+def test_oversized_content_length_is_rejected_before_reading_body(mock_http):
+    mock_http(httpx.Response(200, headers={"Content-Type": "text/html", "Content-Length": "999999999"}))
+
+    with pytest.raises(PageTooLargeError, match="MAX_PAGE_MB"):
+        WebLoader().load("http://example.com/large")
