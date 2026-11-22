@@ -1,4 +1,6 @@
 import dataclasses
+import json
+import os
 
 import numpy as np
 import pytest
@@ -116,7 +118,7 @@ def test_load_rejects_inconsistent_store(tmp_path):
     store = VectorStore()
     store.add(make_chunks("a", "b"), make_vectors(2))
     store.save(str(tmp_path))
-    np.save(tmp_path / "vectors.npy", make_vectors(1))
+    np.save(tmp_path / "current" / "vectors.npy", make_vectors(1))
 
     with pytest.raises(ValueError, match="Corrupt"):
         VectorStore().load(str(tmp_path))
@@ -126,7 +128,59 @@ def test_save_leaves_no_temp_files(tmp_path):
     store = VectorStore(path=str(tmp_path))
     store.add(make_chunks("a"), make_vectors(1))
 
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["chunks.json", "vectors.npy"]
+    store.add(make_chunks("b"), make_vectors(1, offset=100))
+
+    current = tmp_path / "current"
+    assert set(tmp_path.iterdir()) == {current, current.resolve()}
+    assert sorted(p.name for p in current.iterdir()) == ["chunks.json", "vectors.npy"]
+
+
+def test_loads_legacy_store_and_publishes_next_save(tmp_path):
+    original = VectorStore(index_type="brute-force")
+    original.add(make_chunks("a"), make_vectors(1))
+    np.save(tmp_path / "vectors.npy", original.vectors)
+    (tmp_path / "chunks.json").write_text(json.dumps(original.chunks), encoding="utf-8")
+
+    reopened = VectorStore(path=str(tmp_path), index_type="brute-force")
+    assert reopened.chunks == original.chunks
+    np.testing.assert_array_equal(reopened.vectors, original.vectors)
+
+    reopened.add(make_chunks("b"), make_vectors(1, offset=100))
+    loaded = VectorStore(path=str(tmp_path), index_type="brute-force")
+    assert loaded.chunks == reopened.chunks
+    np.testing.assert_array_equal(loaded.vectors, reopened.vectors)
+
+
+@pytest.mark.parametrize("failed_file", ["ivf_index.npz", "current"])
+def test_failed_save_keeps_previous_generation(tmp_path, monkeypatch, failed_file):
+    settings = {"index_type": "ivf", "n_lists": 1, "ivf_min_vectors": 0}
+    store = VectorStore(path=str(tmp_path), **settings)
+    store.add(make_chunks("a", "b"), make_vectors(2))
+    old_files = set(tmp_path.iterdir())
+    original_replace = os.replace
+
+    def fail_replace(src, dst):
+        if os.path.basename(dst) == failed_file:
+            raise OSError("simulated interruption")
+        original_replace(src, dst)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "replace", fail_replace)
+        with pytest.raises(OSError, match="simulated interruption"):
+            store.add(make_chunks("c"), make_vectors(1, offset=100))
+
+    reopened = VectorStore(**settings)
+    reopened.load(str(tmp_path))
+    assert [chunk["text"] for chunk in reopened.chunks] == ["a", "b"]
+    np.testing.assert_array_equal(reopened.vectors, make_vectors(2))
+    assert reopened.index.covers(2)
+    assert set(tmp_path.iterdir()) == old_files
+
+    store.save()
+    reopened.load(str(tmp_path))
+    assert reopened.chunks == store.chunks
+    np.testing.assert_array_equal(reopened.vectors, store.vectors)
+    assert reopened.index.covers(3)
 
 
 def test_search_still_ranks_by_cosine_after_reload(tmp_path):

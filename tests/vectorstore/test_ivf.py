@@ -111,7 +111,7 @@ def test_vector_store_builds_and_persists_the_index_alongside_the_store(tmp_path
 
     assert store.index.n_lists == 10
     assert store.index.covers(100)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["chunks.json", INDEX_FILE, "vectors.npy"]
+    assert sorted(p.name for p in (tmp_path / "current").iterdir()) == ["chunks.json", INDEX_FILE, "vectors.npy"]
 
 
 def test_vector_store_reloads_the_persisted_index_without_rebuilding(tmp_path, monkeypatch):
@@ -129,19 +129,19 @@ def test_vector_store_reloads_the_persisted_index_without_rebuilding(tmp_path, m
 
 def test_vector_store_rebuilds_a_stale_or_missing_index_on_load(tmp_path):
     VectorStore(path=str(tmp_path), index_type="brute-force").add(make_chunks(60), clustered_vectors(n=60))
-    assert not IVFIndex.exists(str(tmp_path))
+    assert not IVFIndex.exists(str(tmp_path / "current"))
 
     reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0)
 
     assert reopened.index.covers(60)
-    assert IVFIndex.exists(str(tmp_path))
+    assert IVFIndex.exists(str(tmp_path / "current"))
 
 
 def test_vector_store_rebuilds_a_corrupt_index_on_load(tmp_path):
     VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0).add(
         make_chunks(60), clustered_vectors(n=60)
     )
-    (tmp_path / INDEX_FILE).write_bytes(b"not an npz file")
+    (tmp_path / "current" / INDEX_FILE).write_bytes(b"not an npz file")
 
     reopened = VectorStore(path=str(tmp_path), index_type="ivf", n_lists=6, ivf_min_vectors=0)
 
@@ -382,7 +382,7 @@ def test_reopening_a_small_store_does_not_build_an_index(tmp_path):
     reopened = VectorStore(path=str(tmp_path), index_type="ivf", ivf_min_vectors=50)
 
     assert reopened.index is None
-    assert not IVFIndex.exists(str(tmp_path))
+    assert not IVFIndex.exists(str(tmp_path / "current"))
 
 
 def test_the_backend_and_threshold_come_from_the_configuration(monkeypatch):
