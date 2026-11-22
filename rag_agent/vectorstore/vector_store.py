@@ -1,5 +1,10 @@
+import fcntl
 import json
 import os
+import shutil
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -14,8 +19,20 @@ logger = get_logger(__name__)
 
 VECTORS_FILE = "vectors.npy"
 CHUNKS_FILE = "chunks.json"
+CURRENT_GENERATION = "current"
+GENERATION_PREFIX = "store-"
 INDEX_TYPES = ("brute-force", "ivf", "hnsw")
 INDEX_CLASSES: dict[str, type[IVFIndex] | type[HNSWIndex]] = {"ivf": IVFIndex, "hnsw": HNSWIndex}
+
+
+@contextmanager
+def _lock_store(path: str) -> Iterator[None]:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
 
 
 class VectorStore:
@@ -36,7 +53,7 @@ class VectorStore:
         - self.vectors  : matrice numpy (N x dim)
         - self.chunks   : liste des chunks associés (id, text, source, metadata)
 
-        path : dossier de persistance (vectors.npy + chunks.json). S'il
+        path : dossier de persistance du store. S'il
         contient déjà un store, il est chargé tel quel (sans recalculer
         les embeddings) ; ensuite chaque `add` y est ajouté automatiquement.
         Sans path, le store reste purement en mémoire.
@@ -84,7 +101,9 @@ class VectorStore:
         """
         True si `path` contient un store sauvegardé
         """
-        return os.path.isfile(os.path.join(path, VECTORS_FILE)) and os.path.isfile(os.path.join(path, CHUNKS_FILE))
+        return os.path.islink(os.path.join(path, CURRENT_GENERATION)) or (
+            os.path.isfile(os.path.join(path, VECTORS_FILE)) and os.path.isfile(os.path.join(path, CHUNKS_FILE))
+        )
 
     @property
     def vectors(self) -> np.ndarray:
@@ -202,19 +221,30 @@ class VectorStore:
             raise ValueError("No path to save the vector store to: pass one or set it in the constructor")
 
         os.makedirs(path, exist_ok=True)
-        # Écritures atomiques : un crash en cours de save laisse l'ancien store intact
-        vectors_path = os.path.join(path, VECTORS_FILE)
-        with open(f"{vectors_path}.tmp", "wb") as f:
-            np.save(f, self.vectors)
-        os.replace(f"{vectors_path}.tmp", vectors_path)
+        with _lock_store(path):
+            current = os.path.join(path, CURRENT_GENERATION)
+            previous = os.readlink(current) if os.path.islink(current) else ""
+            generation = tempfile.mkdtemp(prefix=GENERATION_PREFIX, dir=path)
+            try:
+                with open(os.path.join(generation, VECTORS_FILE), "wb") as f:
+                    np.save(f, self.vectors)
+                with open(os.path.join(generation, CHUNKS_FILE), "w", encoding="utf-8") as f:
+                    json.dump(self.chunks, f, ensure_ascii=False, indent=2)
+                if self.index is not None:
+                    self.index.save(generation)
 
-        chunks_path = os.path.join(path, CHUNKS_FILE)
-        with open(f"{chunks_path}.tmp", "w", encoding="utf-8") as f:
-            json.dump(self.chunks, f, ensure_ascii=False, indent=2)
-        os.replace(f"{chunks_path}.tmp", chunks_path)
+                with tempfile.TemporaryDirectory(prefix="publish-", dir=path) as staging:
+                    pointer = os.path.join(staging, CURRENT_GENERATION)
+                    os.symlink(os.path.basename(generation), pointer)
+                    # Une interruption du processus avant la bascule laisse le dernier store publié accessible.
+                    os.replace(pointer, current)
+            finally:
+                if not os.path.islink(current) or os.readlink(current) != os.path.basename(generation):
+                    shutil.rmtree(generation, ignore_errors=True)
 
-        if self.index is not None:
-            self.index.save(path)
+            # Le verrou garantit qu'aucun chargement n'utilise encore l'ancienne génération.
+            if previous.startswith(GENERATION_PREFIX) and previous == os.path.basename(previous):
+                shutil.rmtree(os.path.join(path, previous), ignore_errors=True)
 
         logger.info("VectorStore sauvegardé dans %s (%d chunks)", path, len(self.chunks))
 
@@ -226,21 +256,25 @@ class VectorStore:
         if not path:
             raise ValueError("No path to load the vector store from: pass one or set it in the constructor")
 
-        matrix = np.load(os.path.join(path, VECTORS_FILE), allow_pickle=False)
-        with open(os.path.join(path, CHUNKS_FILE), encoding="utf-8") as f:
-            chunks = json.load(f)
+        # Le chargement peut reconstruire et écrire l'index.
+        with _lock_store(path):
+            current = os.path.join(path, CURRENT_GENERATION)
+            generation = os.path.join(path, os.readlink(current)) if os.path.islink(current) else path
+            matrix = np.load(os.path.join(generation, VECTORS_FILE), allow_pickle=False)
+            with open(os.path.join(generation, CHUNKS_FILE), encoding="utf-8") as f:
+                chunks = json.load(f)
 
-        if len(chunks) != len(matrix):
-            raise ValueError(f"Corrupt vector store at {path}: {len(matrix)} vectors but {len(chunks)} chunks")
+            if len(chunks) != len(matrix):
+                raise ValueError(f"Corrupt vector store at {path}: {len(matrix)} vectors but {len(chunks)} chunks")
 
-        self._matrix = matrix if len(matrix) else None
-        self.chunks = chunks
-        self._ids = {c["id"] for c in chunks}
-        logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))
+            self._matrix = matrix if len(matrix) else None
+            self.chunks = chunks
+            self._ids = {c["id"] for c in chunks}
+            logger.info("VectorStore chargé depuis %s (%d chunks)", path, len(self.chunks))
 
-        self.index = None
-        if self.uses_index:
-            self._load_index(path)
+            self.index = None
+            if self.uses_index:
+                self._load_index(generation)
 
     def rebuild_index(self) -> None:
         """

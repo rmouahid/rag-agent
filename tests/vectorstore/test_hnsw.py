@@ -213,7 +213,7 @@ def test_a_stale_graph_is_rebuilt_on_load(vectors, tmp_path):
     reopened = VectorStore(path=str(tmp_path), index_type="hnsw", ivf_min_vectors=0)
 
     assert reopened.index.covers(80)
-    assert HNSWIndex.exists(str(tmp_path))
+    assert HNSWIndex.exists(str(tmp_path / "current"))
 
 
 def test_hnsw_parameters_come_from_the_configuration(vectors, monkeypatch):

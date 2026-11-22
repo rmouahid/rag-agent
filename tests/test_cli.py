@@ -5,6 +5,7 @@ import pytest
 from rag_agent import cli
 from rag_agent.generation.llm import ModelNotFoundError
 from rag_agent.generation.rag_agent import RAGAgent
+from rag_agent.vectorstore.vector_store import VectorStore
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ def test_ingest_indexes_a_file_into_the_persisted_store(vector_store_dir, sample
     out = capsys.readouterr().out
     assert f"{sample_markdown}: " in out
     assert "chunks indexed" in out
-    assert (vector_store_dir / "chunks.json").exists()
+    assert len(VectorStore(path=str(vector_store_dir))) > 0
 
 
 def test_ingest_walks_a_directory_for_supported_files(vector_store_dir, sample_markdown, sample_pdf, capsys):
